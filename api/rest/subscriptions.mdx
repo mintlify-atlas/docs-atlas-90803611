@@ -1,0 +1,395 @@
+---
+title: "Subscriptions"
+description: "Manage customer subscriptions and billing cycles"
+---
+
+Subscriptions represent a customer's agreement to a plan with defined pricing and billing cycles.
+
+## List Subscriptions
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/subscriptions?page=0&per_page=20" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/subscriptions`
+
+List subscriptions with optional filtering by customer or plan.
+
+### Query Parameters
+
+<ParamField query="customer_id" type="string">
+  Filter by customer ID or alias
+</ParamField>
+
+<ParamField query="plan_id" type="string">
+  Filter by plan ID
+</ParamField>
+
+<ParamField query="statuses" type="array">
+  Filter by statuses: `PENDING`, `ACTIVE`, `CANCELED`, `ENDED`
+</ParamField>
+
+<ParamField query="page" type="integer">
+  Page number (0-indexed)
+</ParamField>
+
+<ParamField query="per_page" type="integer">
+  Number of items per page (1-100)
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="array">
+  Array of subscription objects
+  
+  <Expandable title="Subscription properties">
+    <ResponseField name="id" type="string" required>
+      Subscription ID
+    </ResponseField>
+    
+    <ResponseField name="customer_id" type="string" required>
+      Customer ID
+    </ResponseField>
+    
+    <ResponseField name="plan_id" type="string" required>
+      Plan ID
+    </ResponseField>
+    
+    <ResponseField name="status" type="string" required>
+      Status: `PENDING`, `ACTIVE`, `CANCELED`, `ENDED`
+    </ResponseField>
+    
+    <ResponseField name="start_date" type="string" required>
+      Subscription start date
+    </ResponseField>
+    
+    <ResponseField name="current_period_start" type="string" required>
+      Current billing period start
+    </ResponseField>
+    
+    <ResponseField name="current_period_end" type="string">
+      Current billing period end
+    </ResponseField>
+    
+    <ResponseField name="mrr_cents" type="integer" required>
+      Monthly recurring revenue in cents
+    </ResponseField>
+    
+    <ResponseField name="currency" type="string" required>
+      Currency code
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination_meta" type="object">
+  Pagination metadata
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "data": [
+    {
+      "id": "sub_7n42DGM5Tflk9n8mt7Fhc7",
+      "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+      "customer_name": "Acme Corporation",
+      "plan_id": "plan_7n42DGM5Tflk9n8mt7Fhc7",
+      "plan_name": "Pro Plan",
+      "plan_version_id": "plv_7n42DGM5Tflk9n8mt7Fhc7",
+      "plan_version": 1,
+      "status": "ACTIVE",
+      "start_date": "2024-01-01",
+      "current_period_start": "2024-01-01",
+      "current_period_end": "2024-02-01",
+      "period": "MONTHLY",
+      "mrr_cents": 9900,
+      "currency": "USD",
+      "billing_day_anchor": 1,
+      "net_terms": 0,
+      "auto_advance_invoices": true,
+      "charge_automatically": true,
+      "created_at": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "pagination_meta": {
+    "page": 0,
+    "per_page": 20,
+    "total_items": 1,
+    "total_pages": 1
+  }
+}
+```
+</ResponseExample>
+
+## Create Subscription
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://api.meteroid.com/api/v1/subscriptions" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id_or_alias": "acme",
+    "plan_id": "plan_7n42DGM5Tflk9n8mt7Fhc7",
+    "start_date": "2024-02-01",
+    "activation_condition": "ON_START"
+  }'
+```
+</CodeGroup>
+
+**POST** `/api/v1/subscriptions`
+
+Create a new subscription for a customer with a specific plan.
+
+### Request Body
+
+<ParamField body="customer_id_or_alias" type="string" required>
+  Customer ID or alias
+</ParamField>
+
+<ParamField body="plan_id" type="string" required>
+  Plan ID
+</ParamField>
+
+<ParamField body="start_date" type="string (date)" required>
+  Subscription start date (YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="activation_condition" type="string" required>
+  When to activate: `ON_START`, `ON_CHECKOUT`, `MANUAL`
+</ParamField>
+
+<ParamField body="end_date" type="string (date)">
+  Subscription end date (YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="billing_day_anchor" type="integer">
+  Day of month for billing (1-31)
+</ParamField>
+
+<ParamField body="net_terms" type="integer">
+  Payment terms in days (0 = due on issue)
+</ParamField>
+
+<ParamField body="auto_advance_invoices" type="boolean">
+  Auto-finalize invoices. Default: true
+</ParamField>
+
+<ParamField body="charge_automatically" type="boolean">
+  Auto-charge payment method. Default: true
+</ParamField>
+
+<ParamField body="invoice_memo" type="string">
+  Default memo for invoices
+</ParamField>
+
+<ParamField body="purchase_order" type="string">
+  Purchase order reference
+</ParamField>
+
+<ParamField body="coupon_codes" type="array">
+  Array of coupon codes to apply
+</ParamField>
+
+<ParamField body="payment_methods_config" type="object">
+  Payment methods configuration
+</ParamField>
+
+<ParamField body="price_components" type="object">
+  Component customizations
+</ParamField>
+
+<ParamField body="skip_past_invoices" type="boolean">
+  Migration mode: skip creating invoices for past cycles when start_date is in the past
+</ParamField>
+
+### Response
+
+<ResponseField name="subscription" type="object">
+  Created subscription with detailed component information
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "id": "sub_7n42DGM5Tflk9n8mt7Fhc7",
+  "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+  "customer_name": "Acme Corporation",
+  "plan_id": "plan_7n42DGM5Tflk9n8mt7Fhc7",
+  "plan_name": "Pro Plan",
+  "status": "ACTIVE",
+  "start_date": "2024-02-01",
+  "current_period_start": "2024-02-01",
+  "current_period_end": "2024-03-01",
+  "period": "MONTHLY",
+  "mrr_cents": 9900,
+  "currency": "USD",
+  "created_at": "2024-01-15T10:30:00Z"
+}
+```
+</ResponseExample>
+
+## Get Subscription Details
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/subscriptions/{subscription_id}" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/subscriptions/{subscription_id}`
+
+Retrieve detailed information about a subscription including price components and schedules.
+
+### Path Parameters
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+### Response
+
+<ResponseField name="subscription" type="object">
+  Subscription details with components, add-ons, and applied coupons
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "id": "sub_7n42DGM5Tflk9n8mt7Fhc7",
+  "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+  "customer_name": "Acme Corporation",
+  "plan_id": "plan_7n42DGM5Tflk9n8mt7Fhc7",
+  "plan_name": "Pro Plan",
+  "status": "ACTIVE",
+  "start_date": "2024-01-01",
+  "current_period_start": "2024-01-01",
+  "current_period_end": "2024-02-01",
+  "period": "MONTHLY",
+  "mrr_cents": 9900,
+  "currency": "USD",
+  "billing_day_anchor": 1,
+  "net_terms": 0,
+  "auto_advance_invoices": true,
+  "charge_automatically": true,
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+</ResponseExample>
+
+## Update Subscription
+
+<CodeGroup>
+```bash cURL
+curl -X PATCH "https://api.meteroid.com/api/v1/subscriptions/{subscription_id}" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "net_terms": 30
+  }'
+```
+</CodeGroup>
+
+**PATCH** `/api/v1/subscriptions/{subscription_id}`
+
+Update subscription settings like payment configuration, billing options, etc.
+
+### Path Parameters
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+### Request Body
+
+<ParamField body="net_terms" type="integer">
+  Payment terms in days
+</ParamField>
+
+<ParamField body="invoice_memo" type="string">
+  Default invoice memo
+</ParamField>
+
+<ParamField body="payment_methods_config" type="object">
+  Payment methods configuration
+</ParamField>
+
+<ParamField body="auto_advance_invoices" type="boolean">
+  Auto-finalize invoices
+</ParamField>
+
+<ParamField body="charge_automatically" type="boolean">
+  Auto-charge payment method
+</ParamField>
+
+### Response
+
+<ResponseField name="subscription" type="object">
+  Updated subscription object
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "id": "sub_7n42DGM5Tflk9n8mt7Fhc7",
+  "net_terms": 30,
+  "updated_at": "2024-01-15T10:30:00Z"
+}
+```
+</ResponseExample>
+
+## Cancel Subscription
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://api.meteroid.com/api/v1/subscriptions/{subscription_id}/cancel" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "Customer requested cancellation"
+  }'
+```
+</CodeGroup>
+
+**POST** `/api/v1/subscriptions/{subscription_id}/cancel`
+
+Cancel a subscription either immediately or at the end of the billing period.
+
+### Path Parameters
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+### Request Body
+
+<ParamField body="effective_date" type="string (date)">
+  Cancellation effective date (YYYY-MM-DD). If not provided, cancels at end of current billing or committed period.
+</ParamField>
+
+<ParamField body="reason" type="string">
+  Cancellation reason
+</ParamField>
+
+### Response
+
+<ResponseField name="subscription" type="object">
+  Cancelled subscription object
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "subscription": {
+    "id": "sub_7n42DGM5Tflk9n8mt7Fhc7",
+    "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+    "status": "CANCELED",
+    "end_date": "2024-02-01"
+  }
+}
+```
+</ResponseExample>

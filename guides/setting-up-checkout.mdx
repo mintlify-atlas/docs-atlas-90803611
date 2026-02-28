@@ -1,0 +1,621 @@
+---
+title: "Setting Up Checkout Sessions"
+description: "Learn how to create secure checkout flows for subscription activation and payments"
+---
+
+Checkout sessions provide secure, tokenized payment flows for your customers. Use them for self-service subscription signups, subscription activations, and slot upgrades.
+
+## Overview
+
+Meteroid supports two types of checkout:
+
+1. **Self-serve checkout** - Customer selects plan and completes payment
+2. **Subscription activation checkout** - Pre-configured subscription requires payment to activate
+3. **Slot upgrade checkout** - Add seats/units to existing subscription
+
+All checkouts use secure, time-limited tokens to protect customer data.
+
+<Steps>
+
+<Step title="Generate checkout token for subscription activation">
+
+When you create a subscription with `activation_condition: ON_CHECKOUT`, generate a checkout token for the customer to complete payment.
+
+```protobuf
+message GenerateCheckoutTokenRequest {
+  string subscription_id = 1;
+}
+
+message GenerateCheckoutTokenResponse {
+  string token = 1;
+}
+```
+
+**Example workflow:**
+
+1. Create subscription:
+```json
+{
+  "subscription": {
+    "plan_version_id": "ver_01HX...",
+    "customer_id": "cust_01HX...",
+    "start_date": "2024-03-01T00:00:00Z",
+    "trial_duration": 14,
+    "activation_condition": "ON_CHECKOUT",
+    "components": {
+      "parameterized_components": [
+        {
+          "component_id": "comp_seats",
+          "initial_slot_count": 5
+        }
+      ]
+    }
+  }
+}
+```
+
+2. Generate checkout token:
+```json
+{
+  "subscription_id": "sub_01HX..."
+}
+```
+
+3. Receive token:
+```json
+{
+  "token": "ckout_tok_abc123xyz..."
+}
+```
+
+4. Redirect customer to checkout:
+```
+https://your-app.com/checkout?token=ckout_tok_abc123xyz...
+```
+
+The subscription includes a `checkout_url` field you can use directly.
+
+</Step>
+
+<Step title="Retrieve checkout details">
+
+On your checkout page, use the token to fetch checkout details using the PortalCheckoutService.
+
+```protobuf
+message GetCheckoutRequest {
+  optional string coupon_code = 1;
+}
+
+message GetCheckoutResponse {
+  Checkout checkout = 1;
+  CheckoutType checkout_type = 2;
+}
+```
+
+<Note>
+The checkout token is sent via authentication header, not in the request body. Use the CheckoutSession authentication context.
+</Note>
+
+**Example Request:**
+
+```json
+{
+  "coupon_code": "LAUNCH2024"
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "checkout": {
+    "subscription_id": "sub_01HX...",
+    "customer": {
+      "name": "Acme Corporation",
+      "email": "billing@acme.com"
+    },
+    "plan": {
+      "name": "Professional Plan",
+      "billing_period": "MONTHLY"
+    },
+    "line_items": [
+      {
+        "name": "Base subscription",
+        "quantity": 1,
+        "unit_price": "9900",
+        "total": "9900"
+      },
+      {
+        "name": "User seats (5)",
+        "quantity": 5,
+        "unit_price": "1500",
+        "total": "7500"
+      }
+    ],
+    "subtotal": "17400",
+    "tax_amount": "1740",
+    "total": "19140",
+    "currency": "USD",
+    "trial_duration_days": 14,
+    "amount_due_now": "0",
+    "amount_due_after_trial": "19140"
+  },
+  "checkout_type": "CHECKOUT_TYPE_SUBSCRIPTION_ACTIVATION"
+}
+```
+
+### With coupon applied
+
+Pass a `coupon_code` to calculate discounts:
+
+```json
+{
+  "checkout": {
+    "line_items": [...],
+    "subtotal": "17400",
+    "discount": "8700",
+    "tax_amount": "870",
+    "total": "9570",
+    "applied_coupon": {
+      "code": "LAUNCH2024",
+      "description": "50% off first 3 months"
+    }
+  }
+}
+```
+
+Use this data to render your checkout UI showing:
+- Plan details
+- Line items and pricing
+- Trial information
+- Payment collection form
+
+</Step>
+
+<Step title="Confirm checkout and collect payment">
+
+Once the customer provides payment details, confirm the checkout to activate the subscription.
+
+```protobuf
+message ConfirmCheckoutRequest {
+  string payment_method_id = 1;
+  uint64 displayed_amount = 2;
+  string displayed_currency = 3;
+  optional string coupon_code = 4;
+}
+
+message ConfirmCheckoutResponse {
+  optional Transaction transaction = 1;
+  optional string subscription_id = 2;
+  ConfirmCheckoutStatus status = 3;
+}
+
+enum ConfirmCheckoutStatus {
+  CONFIRM_CHECKOUT_STATUS_COMPLETED = 0;
+  CONFIRM_CHECKOUT_STATUS_AWAITING_PAYMENT = 1;
+}
+```
+
+**Example Request:**
+
+```json
+{
+  "payment_method_id": "pm_card_abc123",
+  "displayed_amount": 19140,
+  "displayed_currency": "USD",
+  "coupon_code": "LAUNCH2024"
+}
+```
+
+### For immediate payment methods (cards)
+
+```json
+{
+  "transaction": {
+    "id": "txn_01HX...",
+    "status": "SUCCEEDED",
+    "amount": "19140",
+    "currency": "USD",
+    "payment_method_type": "CARD"
+  },
+  "subscription_id": "sub_01HX...",
+  "status": "CONFIRM_CHECKOUT_STATUS_COMPLETED"
+}
+```
+
+### For async payment methods (SEPA, bank transfer)
+
+```json
+{
+  "transaction": {
+    "id": "txn_01HX...",
+    "status": "PENDING",
+    "amount": "19140",
+    "currency": "USD",
+    "payment_method_type": "SEPA_DEBIT"
+  },
+  "subscription_id": null,
+  "status": "CONFIRM_CHECKOUT_STATUS_AWAITING_PAYMENT"
+}
+```
+
+When `status` is `AWAITING_PAYMENT`:
+- The transaction is pending
+- Subscription will activate when payment webhook confirms
+- Show customer a "payment processing" message
+
+**Displayed amount verification:**
+
+The `displayed_amount` and `displayed_currency` parameters protect against race conditions where pricing changes between fetch and confirm. If they don't match the server's calculation, the request fails.
+
+</Step>
+
+<Step title="Handle slot upgrade checkout">
+
+For existing subscriptions, customers can purchase additional slots (seats, licenses, etc.) via checkout.
+
+### Get slot upgrade checkout details
+
+```protobuf
+message GetSlotUpgradeCheckoutRequest {
+  string subscription_id = 1;
+  string price_component_id = 2;
+  int32 delta = 3;
+}
+
+message GetSlotUpgradeCheckoutResponse {
+  SlotUpgradeCheckout checkout = 1;
+}
+```
+
+**Example Request:**
+
+```json
+{
+  "subscription_id": "sub_01HX...",
+  "price_component_id": "comp_seats",
+  "delta": 5
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "checkout": {
+    "subscription_id": "sub_01HX...",
+    "current_slot_count": 10,
+    "new_slot_count": 15,
+    "delta": 5,
+    "unit": "seat",
+    "unit_price": "1500",
+    "prorated_amount": "3750",
+    "full_period_amount": "7500",
+    "currency": "USD",
+    "days_remaining": 15,
+    "total_days": 30,
+    "amount_due_now": "3750",
+    "description": "Add 5 seats at $15/seat (prorated for 15 days remaining)"
+  }
+}
+```
+
+### Confirm slot upgrade checkout
+
+```protobuf
+message ConfirmSlotUpgradeCheckoutRequest {
+  string subscription_id = 1;
+  string price_component_id = 2;
+  int32 delta = 3;
+  string payment_method_id = 4;
+  uint64 displayed_amount = 5;
+  string displayed_currency = 6;
+}
+
+message ConfirmSlotUpgradeCheckoutResponse {
+  Transaction transaction = 1;
+  uint32 new_slot_count = 2;
+}
+```
+
+**Example Request:**
+
+```json
+{
+  "subscription_id": "sub_01HX...",
+  "price_component_id": "comp_seats",
+  "delta": 5,
+  "payment_method_id": "pm_card_xyz789",
+  "displayed_amount": 3750,
+  "displayed_currency": "USD"
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "transaction": {
+    "id": "txn_01HY...",
+    "status": "SUCCEEDED",
+    "amount": "3750",
+    "currency": "USD"
+  },
+  "new_slot_count": 15
+}
+```
+
+The slots are immediately available to the customer after successful payment.
+
+</Step>
+
+<Step title="Implement checkout UI">
+
+Your checkout page should:
+
+### Display checkout summary
+
+```jsx
+function CheckoutSummary({ checkout }) {
+  return (
+    <div>
+      <h2>{checkout.plan.name}</h2>
+      <p>{checkout.plan.billing_period}</p>
+      
+      {checkout.trial_duration_days > 0 && (
+        <div className="trial-banner">
+          Free trial for {checkout.trial_duration_days} days
+        </div>
+      )}
+      
+      <div className="line-items">
+        {checkout.line_items.map(item => (
+          <div key={item.name}>
+            <span>{item.name}</span>
+            <span>{item.quantity} × ${item.unit_price / 100}</span>
+            <span>${item.total / 100}</span>
+          </div>
+        ))}
+      </div>
+      
+      <div className="totals">
+        <div>
+          <span>Subtotal</span>
+          <span>${checkout.subtotal / 100}</span>
+        </div>
+        
+        {checkout.discount > 0 && (
+          <div className="discount">
+            <span>Discount ({checkout.applied_coupon?.code})</span>
+            <span>-${checkout.discount / 100}</span>
+          </div>
+        )}
+        
+        <div>
+          <span>Tax</span>
+          <span>${checkout.tax_amount / 100}</span>
+        </div>
+        
+        <div className="total">
+          <span>Total</span>
+          <span>${checkout.total / 100}</span>
+        </div>
+        
+        {checkout.trial_duration_days > 0 && (
+          <div className="due-now">
+            <span>Due today</span>
+            <span>${checkout.amount_due_now / 100}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+### Collect payment information
+
+Integrate with your payment provider (Stripe, Adyen, etc.) to collect payment method:
+
+```jsx
+function PaymentForm({ onSubmit }) {
+  const [paymentMethodId, setPaymentMethodId] = useState(null);
+  
+  const handleSubmit = async () => {
+    // Confirm checkout with Meteroid
+    await confirmCheckout({
+      payment_method_id: paymentMethodId,
+      displayed_amount: checkout.total,
+      displayed_currency: checkout.currency
+    });
+    
+    onSubmit();
+  };
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <StripePaymentElement 
+        onComplete={(pm) => setPaymentMethodId(pm.id)}
+      />
+      <button type="submit">Subscribe</button>
+    </form>
+  );
+}
+```
+
+### Handle async payment methods
+
+For payment methods that don't confirm immediately:
+
+```jsx
+function handleCheckoutConfirmation(response) {
+  if (response.status === 'CONFIRM_CHECKOUT_STATUS_COMPLETED') {
+    // Immediate success - redirect to success page
+    router.push('/welcome');
+  } else if (response.status === 'CONFIRM_CHECKOUT_STATUS_AWAITING_PAYMENT') {
+    // Async payment - show pending state
+    showMessage('Payment processing. You\'ll receive an email when your subscription activates.');
+    
+    // Poll for subscription activation or wait for webhook
+    pollSubscriptionStatus(response.transaction.id);
+  }
+}
+```
+
+</Step>
+
+</Steps>
+
+## Checkout token security
+
+Checkout tokens are:
+- **Time-limited** - Expire after a set period (typically 1 hour)
+- **Single-use** - Consumed on successful checkout
+- **Scoped** - Only access to specific checkout, not full API
+- **Authenticated** - Sent via authentication header
+
+**Token usage:**
+
+```bash
+curl https://api.meteroid.com/portal/checkout \
+  -H "Authorization: Bearer ckout_tok_abc123xyz..."
+```
+
+## Self-service checkout flow
+
+For customer-initiated signups:
+
+1. Customer selects plan on your pricing page
+2. You create a subscription with `activation_condition: ON_CHECKOUT`
+3. Generate checkout token
+4. Customer completes payment on checkout page
+5. Subscription activates on successful payment
+
+**Benefits:**
+- No payment gateway code in your main app
+- Secure token-based access
+- Automatic subscription activation
+- Built-in trial support
+
+## Handling payment failures
+
+If checkout confirmation fails:
+
+```json
+{
+  "error": {
+    "code": "payment_failed",
+    "message": "Card declined by issuer",
+    "decline_code": "insufficient_funds"
+  }
+}
+```
+
+Your UI should:
+1. Show the error to the customer
+2. Allow them to try a different payment method
+3. Regenerate checkout token if it expired
+4. Provide support contact for persistent failures
+
+## Best practices
+
+<AccordionGroup>
+
+<Accordion title="Show clear trial messaging">
+Clearly communicate when the trial ends and when payment will be charged. Display `amount_due_now` vs `amount_due_after_trial` prominently.
+</Accordion>
+
+<Accordion title="Validate displayed amounts">
+Always send `displayed_amount` and `displayed_currency` to catch pricing mismatches. Never confirm checkout without these.
+</Accordion>
+
+<Accordion title="Handle token expiration gracefully">
+If a checkout token expires, regenerate it seamlessly. Don't make customers restart the entire flow.
+</Accordion>
+
+<Accordion title="Support coupon codes">
+Allow customers to enter coupon codes and recalculate totals before payment. Call GetCheckout again with the new coupon.
+</Accordion>
+
+<Accordion title="Implement loading states">
+Checkout operations can take several seconds. Show clear loading indicators during payment processing.
+</Accordion>
+
+<Accordion title="Provide checkout abandonment recovery">
+Track incomplete checkouts and send reminder emails with checkout links to recover lost conversions.
+</Accordion>
+
+<Accordion title="Test with different payment methods">
+Test both immediate (card) and async (SEPA) payment methods to ensure your UI handles both flows.
+</Accordion>
+
+</AccordionGroup>
+
+## Example: Complete checkout flow
+
+```typescript
+// 1. Create subscription
+const subscription = await meteroid.subscriptions.create({
+  subscription: {
+    plan_version_id: selectedPlan.versionId,
+    customer_id: currentUser.customerId,
+    start_date: new Date().toISOString(),
+    trial_duration: 14,
+    activation_condition: 'ON_CHECKOUT',
+    components: {
+      parameterized_components: [{
+        component_id: 'comp_seats',
+        initial_slot_count: selectedSeats
+      }]
+    }
+  }
+});
+
+// 2. Redirect to checkout
+window.location.href = subscription.checkout_url;
+
+// 3. On checkout page, fetch details
+const checkout = await fetch('/api/checkout', {
+  headers: {
+    'Authorization': `Bearer ${token}`
+  }
+}).then(r => r.json());
+
+// 4. Collect payment
+const paymentMethod = await stripe.createPaymentMethod({
+  type: 'card',
+  card: cardElement
+});
+
+// 5. Confirm checkout
+const result = await fetch('/api/checkout/confirm', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    payment_method_id: paymentMethod.id,
+    displayed_amount: checkout.total,
+    displayed_currency: checkout.currency
+  })
+}).then(r => r.json());
+
+// 6. Handle result
+if (result.status === 'CONFIRM_CHECKOUT_STATUS_COMPLETED') {
+  router.push('/welcome');
+} else {
+  showPendingMessage();
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Managing Subscriptions" icon="repeat" href="/guides/managing-subscriptions">
+    Learn more about subscription lifecycle management
+  </Card>
+  <Card title="Generating Invoices" icon="file-invoice" href="/guides/generating-invoices">
+    Understand how checkout creates invoices
+  </Card>
+</CardGroup>

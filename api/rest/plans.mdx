@@ -1,0 +1,346 @@
+---
+title: "Plans"
+description: "Retrieve pricing plans and their details"
+---
+
+Plans define the pricing structure, components, and billing terms for subscriptions.
+
+## List Plans
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/plans?page=0&per_page=20" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/plans`
+
+List plans with optional filtering by product family.
+
+### Query Parameters
+
+<ParamField query="product_family_id" type="string">
+  Filter by product family ID
+</ParamField>
+
+<ParamField query="page" type="integer">
+  Page number (0-indexed)
+</ParamField>
+
+<ParamField query="per_page" type="integer">
+  Number of items per page (1-100)
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="array">
+  Array of plan objects
+  
+  <Expandable title="Plan properties">
+    <ResponseField name="id" type="string" required>
+      Plan ID
+    </ResponseField>
+    
+    <ResponseField name="name" type="string" required>
+      Plan name
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Plan description
+    </ResponseField>
+    
+    <ResponseField name="plan_type" type="string" required>
+      Type: `STANDARD`, `FREE`, `CUSTOM`
+    </ResponseField>
+    
+    <ResponseField name="status" type="string" required>
+      Status: `DRAFT`, `ACTIVE`, `INACTIVE`, `ARCHIVED`
+    </ResponseField>
+    
+    <ResponseField name="currency" type="string" required>
+      Currency code
+    </ResponseField>
+    
+    <ResponseField name="net_terms" type="integer" required>
+      Payment terms in days
+    </ResponseField>
+    
+    <ResponseField name="product_family" type="object" required>
+      Product family details
+    </ResponseField>
+    
+    <ResponseField name="price_components" type="array" required>
+      Array of pricing components
+    </ResponseField>
+    
+    <ResponseField name="available_parameters" type="object" required>
+      Available customization parameters
+    </ResponseField>
+    
+    <ResponseField name="version" type="integer" required>
+      Plan version number
+    </ResponseField>
+    
+    <ResponseField name="version_id" type="string" required>
+      Plan version ID
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination_meta" type="object">
+  Pagination metadata
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "data": [
+    {
+      "id": "plan_7n42DGM5Tflk9n8mt7Fhc7",
+      "name": "Pro Plan",
+      "description": "For growing businesses",
+      "plan_type": "STANDARD",
+      "status": "ACTIVE",
+      "currency": "USD",
+      "net_terms": 0,
+      "product_family": {
+        "id": "pf_7n42DGM5Tflk9n8mt7Fhc7",
+        "name": "SaaS Platform"
+      },
+      "price_components": [
+        {
+          "id": "price_7n42DGM5Tflk9n8mt7Fhc7",
+          "name": "Base Fee",
+          "product_id": "prd_7n42DGM5Tflk9n8mt7Fhc7",
+          "fee": {
+            "fee_type": "rate",
+            "rates": [
+              {
+                "term": "MONTHLY",
+                "price": "99.00"
+              }
+            ]
+          }
+        }
+      ],
+      "available_parameters": {
+        "billing_periods": {},
+        "capacity_thresholds": {},
+        "slot_components": []
+      },
+      "version": 1,
+      "version_id": "plv_7n42DGM5Tflk9n8mt7Fhc7",
+      "created_at": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "pagination_meta": {
+    "page": 0,
+    "per_page": 20,
+    "total_items": 1,
+    "total_pages": 1
+  }
+}
+```
+</ResponseExample>
+
+## Get Plan
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/plans/{plan_id}" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/plans/{plan_id}`
+
+Retrieve the details of a specific plan.
+
+### Path Parameters
+
+<ParamField path="plan_id" type="string" required>
+  Plan ID
+</ParamField>
+
+### Response
+
+<ResponseField name="plan" type="object">
+  Complete plan details including all price components, trial configuration, and available parameters
+  
+  <Expandable title="properties">
+    <ResponseField name="id" type="string" required>
+      Plan ID
+    </ResponseField>
+    
+    <ResponseField name="name" type="string" required>
+      Plan name
+    </ResponseField>
+    
+    <ResponseField name="price_components" type="array" required>
+      Detailed pricing components with fee structures
+    </ResponseField>
+    
+    <ResponseField name="trial" type="object">
+      Trial configuration
+      
+      <Expandable title="properties">
+        <ResponseField name="duration_days" type="integer">
+          Trial duration in days
+        </ResponseField>
+        
+        <ResponseField name="fallback_plan_id" type="string">
+          Plan ID to downgrade to after trial
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "id": "plan_7n42DGM5Tflk9n8mt7Fhc7",
+  "name": "Pro Plan",
+  "description": "For growing businesses",
+  "plan_type": "STANDARD",
+  "status": "ACTIVE",
+  "currency": "USD",
+  "net_terms": 0,
+  "product_family": {
+    "id": "pf_7n42DGM5Tflk9n8mt7Fhc7",
+    "name": "SaaS Platform"
+  },
+  "price_components": [
+    {
+      "id": "price_7n42DGM5Tflk9n8mt7Fhc7",
+      "name": "Base Fee",
+      "product_id": "prd_7n42DGM5Tflk9n8mt7Fhc7",
+      "fee": {
+        "fee_type": "rate",
+        "rates": [
+          {
+            "term": "MONTHLY",
+            "price": "99.00"
+          },
+          {
+            "term": "ANNUAL",
+            "price": "990.00"
+          }
+        ]
+      }
+    },
+    {
+      "id": "price_8n42DGM5Tflk9n8mt7Fhc8",
+      "name": "API Calls",
+      "product_id": "prd_8n42DGM5Tflk9n8mt7Fhc8",
+      "fee": {
+        "fee_type": "usage",
+        "metric_id": "bm_7n42DGM5Tflk9n8mt7Fhc7",
+        "cadence": "MONTHLY",
+        "pricing": {
+          "discriminator": "PER_UNIT",
+          "rate": "0.001"
+        }
+      }
+    }
+  ],
+  "available_parameters": {
+    "billing_periods": {
+      "price_7n42DGM5Tflk9n8mt7Fhc7": ["MONTHLY", "ANNUAL"]
+    },
+    "capacity_thresholds": {},
+    "slot_components": []
+  },
+  "version": 1,
+  "version_id": "plv_7n42DGM5Tflk9n8mt7Fhc7",
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+</ResponseExample>
+
+## Plan Fee Types
+
+Plans can include various fee types:
+
+### Rate Fee
+
+Recurring subscription fee (e.g., monthly or annual charge).
+
+```json
+{
+  "fee_type": "rate",
+  "rates": [
+    {
+      "term": "MONTHLY",
+      "price": "99.00"
+    }
+  ]
+}
+```
+
+### Usage Fee
+
+Usage-based pricing tied to a metric.
+
+```json
+{
+  "fee_type": "usage",
+  "metric_id": "bm_7n42DGM5Tflk9n8mt7Fhc7",
+  "cadence": "MONTHLY",
+  "pricing": {
+    "discriminator": "PER_UNIT",
+    "rate": "0.10"
+  }
+}
+```
+
+### Slot Fee
+
+Per-seat or per-slot pricing.
+
+```json
+{
+  "fee_type": "slot",
+  "slot_unit_name": "seat",
+  "minimum_count": 1,
+  "quota": 10,
+  "rates": [
+    {
+      "term": "MONTHLY",
+      "price": "10.00"
+    }
+  ]
+}
+```
+
+### Capacity Fee
+
+Capacity-based pricing with included usage and overage.
+
+```json
+{
+  "fee_type": "capacity",
+  "metric_id": "bm_7n42DGM5Tflk9n8mt7Fhc7",
+  "cadence": "MONTHLY",
+  "thresholds": [
+    {
+      "included_amount": 10000,
+      "price": "50.00",
+      "per_unit_overage": "0.01"
+    }
+  ]
+}
+```
+
+### One-Time Fee
+
+Setup or one-time charge.
+
+```json
+{
+  "fee_type": "one_time",
+  "unit_price": "500.00",
+  "quantity": 1
+}
+```

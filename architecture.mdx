@@ -1,0 +1,509 @@
+---
+title: Architecture
+description: Understanding Meteroid's system architecture and components
+---
+
+# System Architecture
+
+Meteroid is built as a cloud-native, modular platform designed for scalability, reliability, and performance. This guide explains the core components and how they interact.
+
+## Overview
+
+Meteroid consists of three main modules working together to provide a complete billing infrastructure:
+
+```mermaid
+graph TB
+    Client[Your Application] -->|Events| Metering[Metering API]
+    Client -->|Billing Operations| Meteroid[Meteroid API]
+    Web[Web UI] --> Meteroid
+    
+    Metering -->|Ingest| Kafka[Redpanda/Kafka]
+    Kafka -->|Stream| ClickHouse[ClickHouse]
+    Metering -.->|Query Usage| ClickHouse
+    
+    Meteroid -->|Billing Data| Postgres[(PostgreSQL)]
+    Meteroid -.->|Fetch Usage| Metering
+    
+    Scheduler[Scheduler] -->|Invoice Generation| Meteroid
+    Scheduler -->|Periodic Tasks| Postgres
+    
+    style Metering fill:#e1f5ff
+    style Meteroid fill:#fff4e1
+    style Web fill:#f0f0f0
+```
+
+## Core Modules
+
+### 1. Meteroid (Billing Engine)
+
+**Location**: `modules/meteroid/`  
+**Language**: Rust  
+**Ports**: 50061 (gRPC), 8084 (REST)
+
+The main billing engine that handles:
+
+- **Customer Management** - CRUD operations for customers and their billing configuration
+- **Product Catalog** - Products, plans, and pricing components
+- **Subscription Lifecycle** - Create, modify, activate, cancel subscriptions
+- **Invoice Generation** - Automated invoice creation with usage aggregation
+- **Payment Processing** - Integration with payment providers (Stripe)
+- **Credits & Coupons** - Promotional credits and discount management
+- **Tax Calculation** - Tax computation and compliance
+- **Webhooks** - Event notifications via Svix integration
+
+**Technology Stack**:
+- **tonic** - gRPC server/client framework
+- **axum** - HTTP/REST API framework
+- **diesel** - PostgreSQL ORM for data persistence
+- **object_store** - File storage (local filesystem, S3, Azure, GCP)
+- **svix** - Webhook delivery
+
+**Key Files**:
+- `src/bin/server.rs` - Main API server (`meteroid-api` binary)
+- `src/bin/scheduler.rs` - Background job scheduler (`meteroid-scheduler` binary)
+- `src/api/` - gRPC service implementations
+- `src/api_rest/` - REST API endpoints with OpenAPI/Swagger
+- `crates/meteroid-store/` - Database access layer
+- `crates/meteroid-invoicing/` - Invoice generation logic
+
+### 2. Metering (Usage Tracking)
+
+**Location**: `modules/metering/`  
+**Language**: Rust  
+**Port**: 50062
+
+High-performance usage event ingestion and aggregation:
+
+- **Event Ingestion** - REST/gRPC API for receiving usage events
+- **Event Streaming** - Publishing events to Kafka/Redpanda
+- **Event Storage** - Persisting events in ClickHouse
+- **Usage Queries** - Aggregating usage data with dimensions and filters
+- **Meter Configuration** - Defining aggregation rules (SUM, COUNT, MAX, etc.)
+
+**Technology Stack**:
+- **rdkafka** - Kafka producer for event streaming
+- **clickhouse/klickhouse** - ClickHouse client for event storage and queries
+- **tonic** - gRPC server for ingestion API
+
+**Event Flow**:
+1. Application sends event to `/events/ingest` endpoint
+2. Event validated and published to Kafka topic (`meteroid-events-raw`)
+3. Consumer writes events to ClickHouse in batches
+4. Events queryable immediately for usage reporting
+
+**Key Files**:
+- `src/bin/server.rs` - Metering API server (`metering-api` binary)
+- `src/ingest/` - Event ingestion handlers
+- `src/connectors/clickhouse/` - ClickHouse integration
+- `src/connectors/kafka/` - Kafka producer/consumer
+- `proto/events.proto` - Event schema definition
+
+### 3. Web (Frontend)
+
+**Location**: `modules/web/`  
+**Language**: TypeScript/React  
+**Port**: 3000 (development), 80 (production)
+
+Modern web interface for billing operations:
+
+- **Dashboard** - Overview of revenue, subscriptions, and usage
+- **Customer Portal** - Customer management and details
+- **Plan Builder** - Visual plan creation with pricing components
+- **Subscription Management** - Create and modify subscriptions
+- **Invoice Viewer** - Review and finalize invoices
+- **Analytics** - Usage charts and billing analytics
+
+**Technology Stack**:
+- **React** - UI framework
+- **TypeScript** - Type-safe development
+- **Vite** - Build tool and dev server
+- **Tanstack Query** - Data fetching and caching
+- **Tailwind CSS** - Styling
+
+**Structure**:
+- `web-app/` - Main application
+- `packages/ui/` - Shared UI components
+- `packages/common/` - Shared utilities
+
+## Infrastructure Components
+
+### PostgreSQL
+
+**Image**: `ghcr.io/meteroid-oss/meteroid-postgres:17.4`  
+**Port**: 5432
+
+Primary database for billing data:
+
+- Customers and organizations
+- Plans, pricing, and product catalog
+- Subscriptions and their configurations
+- Invoices and line items
+- Credits, coupons, and discounts
+- Payment methods and transactions
+- Webhooks and integrations
+
+**Configuration**:
+```yaml
+command:
+  - "postgres"
+  - "-c"
+  - "wal_level=logical"  # For CDC/replication
+  - "-c"
+  - "shared_preload_libraries=pg_stat_statements"  # Query monitoring
+```
+
+### ClickHouse
+
+**Image**: `clickhouse/clickhouse-server:25.6.2-alpine`  
+**Ports**: 8123 (HTTP), 9000 (TCP)
+
+Column-oriented database for usage events:
+
+- High write throughput (millions of events/second)
+- Efficient aggregation queries
+- Time-series optimized storage
+- Real-time usage analytics
+
+**Why ClickHouse?**
+- **Fast ingestion**: Handles high event volumes with minimal latency
+- **Compression**: Efficient storage with 10-100x compression ratios
+- **Query performance**: Sub-second aggregation queries on billions of rows
+- **Scalability**: Horizontal scaling with sharding and replication
+
+### Redpanda (Kafka)
+
+**Image**: `docker.redpanda.com/redpandadata/redpanda:v23.3.1`  
+**Port**: 9092
+
+Kafka-compatible event streaming:
+
+- **Decoupling**: Separates ingestion from storage
+- **Reliability**: Event durability and delivery guarantees
+- **Buffering**: Handles traffic spikes
+- **Replay**: Reprocess events if needed
+
+**Topics**:
+- `meteroid-events-raw` - Raw usage events from ingestion API
+
+<Note>
+  Redpanda is a Kafka-compatible streaming platform that's simpler to operate than Apache Kafka. You can also use standard Kafka if preferred.
+</Note>
+
+## Data Flow
+
+### 1. Usage Event Journey
+
+```
+┌─────────────┐
+│ Application │
+└──────┬──────┘
+       │ POST /events/ingest
+       ▼
+┌─────────────┐
+│ Metering API│
+└──────┬──────┘
+       │ Validate & Deduplicate
+       ▼
+┌─────────────┐
+│   Kafka     │  Topic: meteroid-events-raw
+└──────┬──────┘
+       │ Consume
+       ▼
+┌─────────────┐
+│ ClickHouse  │  Batch Insert
+└─────────────┘
+       │
+       │ Query Usage
+       ▼
+┌─────────────┐
+│Meteroid API │  Aggregation for billing
+└─────────────┘
+```
+
+### 2. Invoice Generation Flow
+
+```
+┌──────────────┐
+│  Scheduler   │  Periodic check (daily)
+└──────┬───────┘
+       │ Find due subscriptions
+       ▼
+┌──────────────┐
+│Meteroid API  │
+└──────┬───────┘
+       │
+       ├─► Query usage from Metering API
+       ├─► Calculate charges per price component
+       ├─► Apply credits & coupons
+       ├─► Compute taxes
+       ├─► Generate invoice line items
+       │
+       ▼
+┌──────────────┐
+│  PostgreSQL  │  Store invoice
+└──────┬───────┘
+       │
+       ├─► Trigger webhook (invoice.created)
+       └─► Schedule payment collection
+```
+
+## Deployment Architecture
+
+### Docker Compose (Development/Testing)
+
+**Location**: `docker/deploy/docker-compose.yml`
+
+Single-server deployment suitable for:
+- Development and testing
+- Small production workloads (less than 100K events/day)
+- Quick demos and POCs
+
+**Services**:
+- `meteroid-db` - PostgreSQL database
+- `clickhouse` - ClickHouse for events
+- `redpanda` - Kafka-compatible streaming
+- `meteroid-api` - Main billing API
+- `meteroid-scheduler` - Background jobs
+- `metering-api` - Usage tracking API
+- `meteroid-web` - Web interface
+
+### Kubernetes (Production)
+
+**Location**: `k8s/meteroid/`
+
+Helm chart for production deployment with:
+- Horizontal pod autoscaling
+- Resource limits and requests
+- Health checks and readiness probes
+- Persistent volume claims
+- Ingress configuration
+- Secrets management
+
+**Scaling Considerations**:
+
+| Component | Scaling Strategy | Bottleneck |
+|-----------|------------------|------------|
+| Meteroid API | Horizontal (stateless) | Database connections |
+| Metering API | Horizontal (stateless) | Kafka throughput |
+| ClickHouse | Horizontal (sharding) | Disk I/O |
+| PostgreSQL | Vertical (read replicas) | Write throughput |
+| Kafka/Redpanda | Horizontal (partitions) | Network I/O |
+
+## Technology Choices
+
+### Why Rust?
+
+- **Performance**: Compile-time optimizations, zero-cost abstractions
+- **Safety**: Memory safety without garbage collection
+- **Concurrency**: Fearless concurrency with async/await
+- **Reliability**: Catch bugs at compile time
+- **Efficiency**: Low resource usage, ideal for cloud deployments
+
+### Why gRPC?
+
+- **Performance**: Binary protocol, HTTP/2 multiplexing
+- **Type Safety**: Protocol buffers for schema validation
+- **Streaming**: Bidirectional streaming support
+- **Interoperability**: Client libraries for all languages
+
+**Proto Definitions**:
+- `modules/meteroid/proto/` - Billing API schemas
+- `modules/metering/proto/` - Metering API schemas
+
+### Why ClickHouse?
+
+- **OLAP Workload**: Optimized for analytical queries
+- **Compression**: 10-100x compression reduces storage costs
+- **Speed**: Real-time queries on billions of rows
+- **Scalability**: Handles petabytes of data
+
+## Configuration
+
+Meteroid is configured via environment variables (see `.env.example`):
+
+```bash
+# Platform Secrets
+JWT_SECRET=changeMeSecret
+INTERNAL_API_SECRET=changeMeSecret
+SECRETS_CRYPT_KEY=00000000000000000000000000000000
+
+# Meteroid API
+METEROID_API_LISTEN_ADDRESS=0.0.0.0:50061
+METEROID_API_EXTERNAL_URL=http://127.0.0.1:50061
+METEROID_REST_API_LISTEN_ADDRESS=0.0.0.0:8084
+
+# Metering API
+METERING_API_LISTEN_ADDRESS=0.0.0.0:50062
+METERING_API_EXTERNAL_URL=http://127.0.0.1:50062
+
+# Database
+DATABASE_URL=postgres://meteroid:secret@localhost:5432/meteroid
+
+# Kafka
+KAFKA_BOOTSTRAP_SERVERS=127.0.0.1:9092
+KAFKA_RAW_TOPIC=meteroid-events-raw
+
+# ClickHouse
+CLICKHOUSE_HTTP_ADDRESS=http://127.0.0.1:8123
+CLICKHOUSE_TCP_ADDRESS=127.0.0.1:9000
+CLICKHOUSE_DATABASE=meteroid
+```
+
+Full configuration reference: [.env.example](https://github.com/meteroid-oss/meteroid/blob/main/.env.example)
+
+## Building from Source
+
+### Requirements
+
+- **Rust** >= 1.74
+- **Node.js** >= 20
+- **pnpm** >= 8
+- **protoc** >= 3.17
+- **Docker** >= 27
+- **PostgreSQL** >= 12
+
+### Build Steps
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    # Rust backend
+    cargo build -p meteroid
+    cargo build -p metering
+    
+    # Web frontend
+    pnpm install --prefix modules/web
+    ```
+  </Step>
+
+  <Step title="Start infrastructure">
+    ```bash
+    # Without metering (lighter)
+    docker compose -f docker/develop/docker-compose.yml --env-file .env up
+    
+    # With metering (full stack)
+    docker compose -f docker/develop/docker-compose.yml --env-file .env --profile metering up
+    ```
+  </Step>
+
+  <Step title="Run services">
+    ```bash
+    # Terminal 1: Backend (includes both meteroid and metering)
+    cargo run -p meteroid --bin standalone --features="metering-server"
+    
+    # Terminal 2: Frontend
+    pnpm --prefix modules/web/web-app run dev
+    ```
+    
+    Access the app at http://localhost:5173
+  </Step>
+</Steps>
+
+For detailed development instructions, see [CONTRIBUTING.md](https://github.com/meteroid-oss/meteroid/blob/main/CONTRIBUTING.md).
+
+## API Documentation
+
+### gRPC APIs
+
+Protocol buffer definitions are the source of truth:
+
+- **Customers**: `modules/meteroid/proto/api/customers/v1/customers.proto`
+- **Plans**: `modules/meteroid/proto/api/plans/v1/plans.proto`
+- **Subscriptions**: `modules/meteroid/proto/api/subscriptions/v1/subscriptions.proto`
+- **Events**: `modules/metering/proto/events.proto`
+
+Generate client libraries for any language using `protoc`.
+
+### REST API
+
+OpenAPI specification available at:
+
+```bash
+# Generate OpenAPI spec
+cargo run -p meteroid --bin openapi-generate
+
+# Output: spec/api/v1/openapi.json
+```
+
+REST endpoints are implemented in `modules/meteroid/src/api_rest/` using the `utoipa` framework for automatic OpenAPI generation.
+
+## Performance Characteristics
+
+### Event Ingestion
+
+- **Throughput**: 50K+ events/second (single instance)
+- **Latency**: Less than 10ms p99 (validation + Kafka publish)
+- **Durability**: At-least-once delivery with Kafka
+- **Deduplication**: By event ID
+
+### Billing Operations
+
+- **Customer queries**: Less than 50ms (PostgreSQL indexed)
+- **Invoice generation**: Less than 5s for 1M usage events
+- **Subscription updates**: Less than 100ms
+- **Webhook delivery**: Async with retry (via Svix)
+
+### Usage Queries
+
+- **Simple aggregation**: Less than 100ms (1M events)
+- **Multi-dimensional**: Less than 500ms (1M events with grouping)
+- **Time-series**: Less than 1s (100M events, daily granularity)
+
+## Security
+
+- **Authentication**: JWT tokens for API access
+- **Encryption**: TLS for API endpoints (configure via reverse proxy)
+- **Secrets**: Encrypted storage with `SECRETS_CRYPT_KEY`
+- **Database**: Row-level security for multi-tenancy
+- **API Keys**: Per-tenant metering API keys
+
+## Monitoring & Observability
+
+### OpenTelemetry Integration
+
+```bash
+TELEMETRY_TRACING_ENABLED=true
+TELEMETRY_METRICS_ENABLED=true
+TELEMETRY_OTEL_ENDPOINT=http://localhost:4317
+```
+
+Supported backends:
+- **Grafana Cloud** (via `docker/develop/docker-compose-telemetry-grafana-cloud.yml`)
+- **SigNoz** (via `docker/develop/docker-compose-telemetry-signoz.yml`)
+- Any OpenTelemetry-compatible collector
+
+### Metrics
+
+- Request rates and latencies
+- Event ingestion throughput
+- Database connection pool stats
+- Invoice generation duration
+- Webhook delivery success rates
+
+### Health Checks
+
+- `meteroid-api`: gRPC health probe on port 50061
+- `metering-api`: HTTP health endpoint
+- Database: PostgreSQL `pg_isready`
+- ClickHouse: HTTP ping endpoint
+- Kafka: Cluster health via `rpk`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build your first billing workflow
+  </Card>
+  
+  <Card title="Deployment Guide" icon="server" href="/deployment">
+    Production deployment with Kubernetes
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Complete API documentation
+  </Card>
+  
+  <Card title="Contributing" icon="github" href="https://github.com/meteroid-oss/meteroid/blob/main/CONTRIBUTING.md">
+    Contribute to Meteroid
+  </Card>
+</CardGroup>

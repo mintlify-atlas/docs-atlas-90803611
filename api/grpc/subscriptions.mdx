@@ -1,0 +1,529 @@
+---
+title: 'Subscriptions Service'
+description: 'Create and manage customer subscriptions, plan changes, and usage tracking'
+---
+
+## Overview
+
+The Subscriptions service handles the complete lifecycle of customer subscriptions including:
+
+- Subscription creation and activation
+- Plan changes and upgrades
+- Slot-based billing management
+- Subscription cancellation
+- Usage tracking and upcoming invoice previews
+- CSV bulk import
+
+## Service Definition
+
+### SubscriptionsService
+
+```protobuf
+service SubscriptionsService {
+  rpc CreateSubscription(CreateSubscriptionRequest) returns (CreateSubscriptionResponse);
+  rpc CreateSubscriptions(CreateSubscriptionsRequest) returns (CreateSubscriptionsResponse);
+  rpc GetSubscriptionDetails(GetSubscriptionDetailsRequest) returns (SubscriptionDetails);
+  rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
+  rpc UpdateSlots(UpdateSlotsRequest) returns (UpdateSlotsResponse);
+  rpc GetSlotsValue(GetSlotsValueRequest) returns (GetSlotsValueResponse);
+  rpc ListSlotTransactions(ListSlotTransactionsRequest) returns (ListSlotTransactionsResponse);
+  rpc CancelSlotTransaction(CancelSlotTransactionRequest) returns (CancelSlotTransactionResponse);
+  rpc PreviewSlotUpdate(PreviewSlotUpdateRequest) returns (PreviewSlotUpdateResponse);
+  rpc CancelSubscription(CancelSubscriptionRequest) returns (CancelSubscriptionResponse);
+  rpc ActivateSubscription(ActivateSubscriptionRequest) returns (ActivateSubscriptionResponse);
+  rpc SyncToHubspot(SyncToHubspotRequest) returns (SyncToHubspotResponse);
+  rpc GenerateCheckoutToken(GenerateCheckoutTokenRequest) returns (GenerateCheckoutTokenResponse);
+  rpc UpdateSubscription(UpdateSubscriptionRequest) returns (UpdateSubscriptionResponse);
+  rpc SchedulePlanChange(SchedulePlanChangeRequest) returns (SchedulePlanChangeResponse);
+  rpc PreviewPlanChange(PreviewPlanChangeRequest) returns (PreviewPlanChangeResponse);
+  rpc CancelPlanChange(CancelPlanChangeRequest) returns (CancelPlanChangeResponse);
+  rpc CancelScheduledEvent(CancelScheduledEventRequest) returns (CancelScheduledEventResponse);
+  rpc GetUpcomingInvoice(GetUpcomingInvoiceRequest) returns (GetUpcomingInvoiceResponse);
+  rpc GetSubscriptionComponentUsage(GetSubscriptionComponentUsageRequest) returns (GetSubscriptionComponentUsageResponse);
+}
+```
+
+### SubscriptionsIngestService
+
+```protobuf
+service SubscriptionsIngestService {
+  rpc IngestCsv(IngestCsvRequest) returns (IngestCsvResponse) {}
+}
+```
+
+## RPC Methods
+
+### CreateSubscription
+
+Creates a new subscription for a customer.
+
+<ParamField path="subscription" type="CreateSubscription" required>
+  Subscription configuration
+  
+  <Expandable title="CreateSubscription fields">
+    <ParamField path="plan_version_id" type="string" required>
+      Plan version to subscribe to
+    </ParamField>
+    <ParamField path="customer_id" type="string" required>
+      Customer ID
+    </ParamField>
+    <ParamField path="trial_duration" type="uint32">
+      Trial duration in days
+    </ParamField>
+    <ParamField path="start_date" type="string" required>
+      Subscription start date
+    </ParamField>
+    <ParamField path="end_date" type="string">
+      Optional end date
+    </ParamField>
+    <ParamField path="billing_day_anchor" type="uint32">
+      Day of month for billing (1-31)
+    </ParamField>
+    <ParamField path="net_terms" type="uint32">
+      Payment terms in days
+    </ParamField>
+    <ParamField path="invoice_memo" type="string">
+      Memo to include on invoices
+    </ParamField>
+    <ParamField path="purchase_order" type="string">
+      Purchase order reference
+    </ParamField>
+    <ParamField path="components" type="CreateSubscriptionComponents">
+      Component customizations
+    </ParamField>
+    <ParamField path="add_ons" type="CreateSubscriptionAddOns">
+      Add-ons to include
+    </ParamField>
+    <ParamField path="coupons" type="CreateSubscriptionCoupons">
+      Coupons to apply
+    </ParamField>
+    <ParamField path="activation_condition" type="ActivationCondition">
+      When to activate: `ON_START`, `ON_CHECKOUT`, `MANUAL`
+    </ParamField>
+    <ParamField path="auto_advance_invoices" type="bool">
+      Auto-finalize draft invoices
+    </ParamField>
+    <ParamField path="charge_automatically" type="bool">
+      Automatically charge invoices
+    </ParamField>
+    <ParamField path="payment_methods_config" type="PaymentMethodsConfig">
+      Payment method configuration
+    </ParamField>
+    <ParamField path="skip_past_invoices" type="bool">
+      Migration mode: skip creating invoices for past cycles
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Response:** Returns `CreatedSubscription` with the new subscription details.
+
+### CreateSubscriptions
+
+Creates multiple subscriptions in a single request.
+
+<ParamField path="subscriptions" type="CreateSubscription[]" required>
+  Array of subscription configurations
+</ParamField>
+
+**Response:** Returns array of `CreatedSubscription` objects.
+
+### GetSubscriptionDetails
+
+Retrieves complete subscription information including components, metrics, and schedules.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+**Response:** Returns `SubscriptionDetails` with full subscription data.
+
+### ListSubscriptions
+
+Retrieves a paginated list of subscriptions.
+
+<ParamField path="customer_id" type="string">
+  Filter by customer ID
+</ParamField>
+
+<ParamField path="plan_id" type="string">
+  Filter by plan ID
+</ParamField>
+
+<ParamField path="pagination" type="Pagination">
+  Pagination parameters
+</ParamField>
+
+<ParamField path="status" type="SubscriptionStatus[]">
+  Filter by status: `PENDING`, `TRIALING`, `ACTIVE`, `CANCELED`, `ENDED`, `TRIAL_EXPIRED`, `ERRORED`
+</ParamField>
+
+**Response:** Returns paginated `Subscription[]` list.
+
+### UpdateSlots
+
+Updates slot count for slot-based pricing components.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+<ParamField path="price_component_id" type="string" required>
+  Price component ID
+</ParamField>
+
+<ParamField path="delta" type="int32" required>
+  Change in slot count (positive or negative)
+</ParamField>
+
+<ParamField path="billing_mode" type="SlotUpgradeBillingMode">
+  Billing mode: `SLOT_OPTIMISTIC`, `SLOT_ON_CHECKOUT`, `SLOT_ON_INVOICE_PAID`
+</ParamField>
+
+**Response:** Returns current slot value.
+
+### GetSlotsValue
+
+Retrieves current slot value for a unit.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+<ParamField path="unit" type="string" required>
+  Unit name (e.g., "seats")
+</ParamField>
+
+**Response:** Returns current slot count.
+
+### ListSlotTransactions
+
+Lists slot change transactions for a subscription.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+<ParamField path="unit" type="string">
+  Filter by unit name
+</ParamField>
+
+<ParamField path="status" type="SlotTransactionStatus">
+  Filter by status: `SLOT_PENDING`, `SLOT_ACTIVE`
+</ParamField>
+
+**Response:** Returns `SlotTransaction[]` list.
+
+### CancelSlotTransaction
+
+Cancels a pending slot transaction.
+
+<ParamField path="transaction_id" type="string" required>
+  Transaction ID to cancel
+</ParamField>
+
+<ParamField path="reason" type="string">
+  Cancellation reason
+</ParamField>
+
+### PreviewSlotUpdate
+
+Previews the financial impact of a slot change.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+<ParamField path="price_component_id" type="string" required>
+  Price component ID
+</ParamField>
+
+<ParamField path="delta" type="int32" required>
+  Proposed slot change
+</ParamField>
+
+**Response:** Returns detailed preview including prorated amounts and effective dates.
+
+### CancelSubscription
+
+Cancels a subscription with flexible timing options.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+<ParamField path="reason" type="string">
+  Cancellation reason
+</ParamField>
+
+<ParamField path="effective_at" type="oneof">
+  When to cancel:
+  - `immediate`: Cancel immediately
+  - `billing_period_end`: Cancel at end of current period
+  - `date`: Cancel on specific date (ISO 8601)
+</ParamField>
+
+**Response:** Returns updated `Subscription` object.
+
+### ActivateSubscription
+
+Manually activates a subscription.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID to activate
+</ParamField>
+
+**Response:** Returns activated subscription and optional invoice ID.
+
+### UpdateSubscription
+
+Updates subscription settings.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+<ParamField path="charge_automatically" type="bool">
+  Auto-charge setting
+</ParamField>
+
+<ParamField path="auto_advance_invoices" type="bool">
+  Auto-finalize invoices
+</ParamField>
+
+<ParamField path="net_terms" type="uint32">
+  Payment terms in days
+</ParamField>
+
+<ParamField path="invoice_memo" type="string">
+  Invoice memo
+</ParamField>
+
+<ParamField path="purchase_order" type="string">
+  Purchase order reference
+</ParamField>
+
+<ParamField path="payment_methods_config" type="PaymentMethodsConfig">
+  Payment method configuration
+</ParamField>
+
+**Response:** Returns updated `Subscription`.
+
+### SchedulePlanChange
+
+Schedules a plan change for the subscription.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+<ParamField path="new_plan_version_id" type="string" required>
+  New plan version to switch to
+</ParamField>
+
+<ParamField path="parameterized_components" type="PlanChangeComponentParameterization[]">
+  Component parameter overrides
+</ParamField>
+
+**Response:** Returns event ID and effective date.
+
+### PreviewPlanChange
+
+Previews changes when switching plans.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+<ParamField path="new_plan_version_id" type="string" required>
+  Target plan version
+</ParamField>
+
+<ParamField path="parameterized_components" type="PlanChangeComponentParameterization[]">
+  Component customizations
+</ParamField>
+
+**Response:** Returns matched, added, and removed components with pricing details.
+
+### CancelPlanChange
+
+Cancels a scheduled plan change.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+### CancelScheduledEvent
+
+Cancels any scheduled event by event ID.
+
+<ParamField path="event_id" type="string" required>
+  Event ID to cancel
+</ParamField>
+
+### GetUpcomingInvoice
+
+Retrieves a preview of the next invoice.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+**Response:** Returns `UpcomingInvoice` with line items and totals.
+
+### GetSubscriptionComponentUsage
+
+Retrieves usage data for a metered component.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+<ParamField path="metric_id" type="string" required>
+  Billable metric ID
+</ParamField>
+
+**Response:** Returns time-series usage data points for the current period.
+
+### SyncToHubspot
+
+Synchronizes subscriptions to HubSpot.
+
+<ParamField path="subscription_ids" type="string[]" required>
+  List of subscription IDs to sync
+</ParamField>
+
+### GenerateCheckoutToken
+
+Generates a checkout token for payment.
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+**Response:** Returns checkout token string.
+
+### IngestCsv
+
+Bulk imports subscriptions from CSV.
+
+<ParamField path="file" type="FileData" required>
+  CSV file data
+</ParamField>
+
+<ParamField path="delimiter" type="string" required>
+  CSV delimiter
+</ParamField>
+
+<ParamField path="fail_on_error" type="bool" required>
+  Whether to abort on first error
+</ParamField>
+
+**Response:** Returns ingestion statistics.
+
+## Data Models
+
+### Subscription
+
+<ParamField path="id" type="string">
+  Subscription ID
+</ParamField>
+
+<ParamField path="customer_id" type="string">
+  Associated customer ID
+</ParamField>
+
+<ParamField path="plan_id" type="string">
+  Plan ID
+</ParamField>
+
+<ParamField path="plan_version_id" type="string">
+  Plan version ID
+</ParamField>
+
+<ParamField path="status" type="SubscriptionStatus">
+  Current status
+</ParamField>
+
+<ParamField path="start_date" type="string">
+  Subscription start date
+</ParamField>
+
+<ParamField path="end_date" type="string">
+  Optional end date
+</ParamField>
+
+<ParamField path="billing_day_anchor" type="uint32">
+  Billing day of month
+</ParamField>
+
+<ParamField path="current_period_start" type="string">
+  Current billing period start
+</ParamField>
+
+<ParamField path="current_period_end" type="string">
+  Current billing period end
+</ParamField>
+
+<ParamField path="mrr_cents" type="uint64">
+  Monthly recurring revenue in cents
+</ParamField>
+
+<ParamField path="trial_duration" type="uint32">
+  Trial duration in days
+</ParamField>
+
+<ParamField path="activated_at" type="string">
+  Activation timestamp
+</ParamField>
+
+### SubscriptionStatus
+
+Enum values:
+- `PENDING`: Awaiting activation
+- `TRIALING`: In trial period
+- `ACTIVE`: Active subscription
+- `CANCELED`: Canceled subscription
+- `ENDED`: Subscription ended
+- `TRIAL_EXPIRED`: Trial ended awaiting payment
+- `ERRORED`: Error state
+
+### SubscriptionDetails
+
+Extended subscription information.
+
+<ParamField path="subscription" type="Subscription">
+  Base subscription data
+</ParamField>
+
+<ParamField path="schedules" type="Schedule[]">
+  Associated schedules
+</ParamField>
+
+<ParamField path="price_components" type="SubscriptionComponent[]">
+  Price components
+</ParamField>
+
+<ParamField path="metrics" type="BillableMetric[]">
+  Associated metrics
+</ParamField>
+
+<ParamField path="add_ons" type="SubscriptionAddOn[]">
+  Active add-ons
+</ParamField>
+
+<ParamField path="applied_coupons" type="AppliedCouponDetailed[]">
+  Applied coupons
+</ParamField>
+
+<ParamField path="trial_config" type="TrialConfig">
+  Trial configuration
+</ParamField>
+
+<ParamField path="pending_events" type="PendingScheduledEvent[]">
+  Scheduled events
+</ParamField>
+
+## Proto Location
+
+- Service definition: `proto/api/subscriptions/v1/subscriptions.proto`
+- Models: `proto/api/subscriptions/v1/models.proto`

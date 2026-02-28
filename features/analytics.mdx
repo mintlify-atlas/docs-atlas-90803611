@@ -1,0 +1,470 @@
+---
+title: "Analytics"
+description: "Revenue analytics, usage insights, and business intelligence"
+---
+
+Meteroid provides comprehensive analytics to track revenue, monitor usage patterns, and gain actionable insights into your billing operations.
+
+## Analytics Capabilities
+
+<CardGroup cols={2}>
+  <Card title="Revenue Metrics" icon="chart-line">
+    MRR, ARR, churn, expansion, and contraction
+  </Card>
+  <Card title="Usage Analytics" icon="chart-area">
+    Customer consumption patterns and trends
+  </Card>
+  <Card title="Customer Insights" icon="users">
+    Lifetime value, cohort analysis, and segmentation
+  </Card>
+  <Card title="Operational Metrics" icon="gauge">
+    Invoice status, payment collection, and aging
+  </Card>
+</CardGroup>
+
+## Revenue Metrics
+
+### Monthly Recurring Revenue (MRR)
+
+Track predictable revenue from subscriptions:
+
+```typescript
+// Calculate MRR components
+const metrics = {
+  new_mrr: 5000,      // New subscriptions
+  expansion_mrr: 2000, // Upgrades and add-ons
+  contraction_mrr: -500, // Downgrades
+  churned_mrr: -1000,  // Cancellations
+  net_mrr: 5500        // Total MRR
+};
+```
+
+**MRR Growth Formula**:
+```
+MRR Growth = New MRR + Expansion MRR - Contraction MRR - Churned MRR
+```
+
+### Annual Recurring Revenue (ARR)
+
+Project annualized revenue:
+
+```
+ARR = MRR × 12
+```
+
+### MRR Movement
+
+Breakdown of MRR changes:
+
+<Tabs>
+  <Tab title="New MRR">
+    Revenue from brand new customers:
+    
+    ```
+    January:
+    - 10 new customers @ $99/mo = $990
+    - 5 new customers @ $299/mo = $1,495
+    Total New MRR: $2,485
+    ```
+  </Tab>
+  
+  <Tab title="Expansion MRR">
+    Additional revenue from existing customers:
+    
+    ```
+    - Customer A: Starter ($99) → Pro ($299) = +$200
+    - Customer B: Added 5 seats × $10 = +$50
+    - Customer C: Purchased add-on = +$49
+    Total Expansion MRR: $299
+    ```
+  </Tab>
+  
+  <Tab title="Contraction MRR">
+    Lost revenue from downgrades:
+    
+    ```
+    - Customer D: Pro ($299) → Starter ($99) = -$200
+    - Customer E: Removed 3 seats × $10 = -$30
+    Total Contraction MRR: -$230
+    ```
+  </Tab>
+  
+  <Tab title="Churned MRR">
+    Revenue lost from cancellations:
+    
+    ```
+    - Customer F canceled: -$299
+    - Customer G canceled: -$99
+    Total Churned MRR: -$398
+    ```
+  </Tab>
+</Tabs>
+
+## Churn Metrics
+
+### Customer Churn Rate
+
+Percentage of customers who canceled:
+
+```
+Churn Rate = (Customers Lost / Starting Customers) × 100
+
+Example:
+- Started month with 200 customers
+- Lost 10 customers
+- Churn Rate = (10 / 200) × 100 = 5%
+```
+
+### Revenue Churn Rate
+
+Percentage of MRR lost:
+
+```
+Revenue Churn = (Churned MRR / Starting MRR) × 100
+
+Example:
+- Started with $50,000 MRR
+- Lost $2,000 MRR
+- Revenue Churn = (2000 / 50000) × 100 = 4%
+```
+
+### Net Revenue Retention (NRR)
+
+Revenue retention including expansion:
+
+```
+NRR = ((Starting MRR + Expansion - Contraction - Churned) / Starting MRR) × 100
+
+Example:
+- Starting MRR: $50,000
+- Expansion: $5,000
+- Contraction: $1,000
+- Churned: $2,000
+- NRR = ((50000 + 5000 - 1000 - 2000) / 50000) × 100 = 104%
+```
+
+<Info>
+NRR > 100% means you're growing revenue from existing customers faster than you're losing it to churn.
+</Info>
+
+## Usage Analytics
+
+### Top Consumers
+
+Identify highest usage customers:
+
+```typescript
+// Query top 10 API consumers
+const topUsers = await meteroid.analytics.topUsage({
+  metric: "api_calls",
+  period: "last_30_days",
+  limit: 10
+});
+
+// Result:
+// 1. Customer A: 2.5M API calls
+// 2. Customer B: 1.8M API calls
+// 3. Customer C: 1.2M API calls
+```
+
+### Usage Trends
+
+Track usage growth over time:
+
+```typescript
+const trend = await meteroid.analytics.usageTrend({
+  metric: "compute_hours",
+  period: "last_12_months",
+  group_by: "month"
+});
+```
+
+### Usage Distribution
+
+Understand usage patterns:
+
+```
+API Call Distribution (monthly):
+0-10K calls:     45% of customers
+10K-100K calls:  35% of customers
+100K-1M calls:   15% of customers
+1M+ calls:       5% of customers
+```
+
+### Utilization Rates
+
+Track plan limit usage:
+
+```typescript
+// Customers near plan limits
+const nearLimit = customers.filter(c => 
+  c.usage / c.plan_limit > 0.8
+);
+
+// Upsell opportunity: 23 customers at 80%+ utilization
+```
+
+## Customer Insights
+
+### Customer Lifetime Value (LTV)
+
+Predict customer value:
+
+```
+LTV = (Average Revenue per Customer) / Churn Rate
+
+Example:
+- Average customer pays $299/month
+- Monthly churn rate: 2%
+- LTV = $299 / 0.02 = $14,950
+```
+
+### Cohort Analysis
+
+Track retention by signup month:
+
+```
+January 2024 Cohort (100 customers):
+Month 1: 100 customers (100% retention)
+Month 2: 95 customers (95% retention)
+Month 3: 91 customers (91% retention)
+Month 4: 88 customers (88% retention)
+```
+
+### Customer Segmentation
+
+Group customers by characteristics:
+
+<AccordionGroup>
+  <Accordion title="By Plan">
+    ```
+    Starter:     200 customers, $19,800 MRR
+    Pro:         150 customers, $44,850 MRR
+    Enterprise:  30 customers, $29,700 MRR
+    Total:       380 customers, $94,350 MRR
+    ```
+  </Accordion>
+  
+  <Accordion title="By Usage Level">
+    ```
+    Light users:   45% (under 50% plan limit)
+    Medium users:  35% (50-80% plan limit)
+    Heavy users:   20% (over 80% plan limit)
+    ```
+  </Accordion>
+  
+  <Accordion title="By Revenue">
+    ```
+    Enterprise (>$1K/mo):  Top 10%, 60% of revenue
+    Mid-market ($100-1K):  30%, 30% of revenue
+    SMB (<$100/mo):        60%, 10% of revenue
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Operational Metrics
+
+### Invoice Status
+
+Track invoice collection:
+
+```typescript
+const invoiceMetrics = {
+  total_invoiced: 150000,     // Total billed
+  paid: 135000,               // 90% collected
+  pending: 12000,             // 8% pending
+  overdue: 3000,              // 2% overdue
+  collection_rate: 0.90       // 90% collection rate
+};
+```
+
+### Accounts Receivable Aging
+
+```
+Outstanding Invoices:
+Current (0-30 days):    $12,000
+31-60 days:             $2,000
+61-90 days:             $800
+90+ days:               $200
+Total Outstanding:      $15,000
+```
+
+### Payment Metrics
+
+```typescript
+// Days to payment
+average_days_to_payment: 12,
+median_days_to_payment: 8,
+
+// Failed payments
+failed_payment_rate: 0.05,  // 5% failure rate
+retry_success_rate: 0.60    // 60% succeed on retry
+```
+
+## Dashboard Views
+
+### Executive Dashboard
+
+High-level KPIs:
+- Current MRR
+- MRR growth rate
+- Customer count
+- Average revenue per account (ARPA)
+- Churn rate
+- Net revenue retention
+
+### Finance Dashboard
+
+Accounting metrics:
+- Invoiced amount
+- Collected amount
+- Outstanding balance
+- Accounts receivable aging
+- Revenue by plan
+- Tax collected
+
+### Operations Dashboard
+
+Day-to-day metrics:
+- New signups today
+- Cancellations today
+- Failed payments
+- Upcoming renewals
+- Expiring trials
+- Support tickets by billing issue
+
+### Usage Dashboard
+
+Consumption insights:
+- Total events ingested
+- Top metrics by volume
+- Customers near limits
+- Usage by dimension (region, feature)
+- Usage growth trends
+
+## Reporting
+
+### Scheduled Reports
+
+Automatic report delivery:
+
+```typescript
+// Daily report at 9am
+schedule: {
+  frequency: "daily",
+  time: "09:00",
+  recipients: ["finance@company.com"],
+  metrics: ["mrr", "new_customers", "churn"]
+}
+
+// Monthly board report
+schedule: {
+  frequency: "monthly",
+  day: 1,
+  recipients: ["board@company.com"],
+  metrics: ["mrr", "arr", "nrr", "churn", "ltv"]
+}
+```
+
+### Export Formats
+
+- **CSV**: For Excel analysis
+- **PDF**: For presentations
+- **JSON**: For API integration
+- **Webhook**: Real-time streaming
+
+## ClickHouse Analytics
+
+Meteroid uses ClickHouse for high-performance analytics:
+
+<CardGroup cols={2}>
+  <Card title="Fast Queries" icon="bolt">
+    Sub-second queries on billions of events
+  </Card>
+  <Card title="Real-time" icon="clock">
+    Query live data without batch processing
+  </Card>
+  <Card title="Scalable" icon="database">
+    Handle petabytes of historical data
+  </Card>
+  <Card title="Flexible" icon="sliders">
+    Arbitrary dimensions and aggregations
+  </Card>
+</CardGroup>
+
+### Custom Queries
+
+Run custom SQL queries:
+
+```sql
+-- Top customers by revenue (last 30 days)
+SELECT 
+  customer_id,
+  customer_name,
+  SUM(amount) as revenue
+FROM invoices
+WHERE invoice_date >= now() - INTERVAL 30 DAY
+  AND status = 'paid'
+GROUP BY customer_id, customer_name
+ORDER BY revenue DESC
+LIMIT 10;
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Set Baseline Metrics">
+    **Track these core metrics from day one**:
+    
+    1. MRR and growth rate
+    2. Customer count
+    3. Churn rate (customer and revenue)
+    4. Average revenue per account (ARPA)
+    5. Customer acquisition cost (CAC)
+    6. Lifetime value (LTV)
+    
+    **Why**: You can't improve what you don't measure.
+  </Accordion>
+  
+  <Accordion title="Monitor Cohorts">
+    **Track retention by signup cohort**:
+    
+    - Identify which months had best retention
+    - Correlate with product changes or campaigns
+    - Spot seasonal patterns
+    - Predict future churn
+    
+    **Action**: If recent cohorts have worse retention, investigate immediately.
+  </Accordion>
+  
+  <Accordion title="Segment Analysis">
+    **Analyze metrics by customer segment**:
+    
+    - By plan tier
+    - By industry
+    - By company size
+    - By acquisition channel
+    
+    **Insight**: Enterprise customers may have 50% lower churn than SMB.
+  </Accordion>
+  
+  <Accordion title="Predictive Monitoring">
+    **Set up alerts for leading indicators**:
+    
+    - Usage drop >30% (churn risk)
+    - Payment failure (collection risk)
+    - Usage at 90% of limit (upsell opportunity)
+    - Trial ending in 3 days (conversion opportunity)
+    
+    **Result**: Proactive intervention improves outcomes.
+  </Accordion>
+</AccordionGroup>
+
+<CardGroup cols={2}>
+  <Card title="Revenue Analytics" icon="chart-line" href="/concepts/invoicing">
+    Understanding billing and revenue
+  </Card>
+  <Card title="Usage Analytics" icon="chart-area" href="/concepts/metering">
+    Learn about usage tracking
+  </Card>
+</CardGroup>

@@ -1,0 +1,374 @@
+---
+title: Building from Source
+description: Detailed instructions for building Meteroid from source code
+---
+
+This guide provides detailed instructions for building Meteroid from source, including all prerequisites and build steps.
+
+## Build Tools
+
+Meteroid uses the following build tools and technologies:
+
+<CardGroup cols={2}>
+  <Card title="Cargo" icon="rust">
+    Rust package manager and build system
+  </Card>
+  <Card title="pnpm" icon="npm">
+    Fast, disk space efficient package manager
+  </Card>
+  <Card title="protoc" icon="code">
+    Protocol Buffer compiler for gRPC
+  </Card>
+  <Card title="docker-compose" icon="docker">
+    Container orchestration for services
+  </Card>
+</CardGroup>
+
+## System Requirements
+
+### Minimum Versions
+
+Ensure your development environment meets these requirements:
+
+| Tool | Minimum Version |
+|------|----------------|
+| Postgres | 12 |
+| Rust | 1.74 |
+| Node.js | 20 |
+| pnpm | 8 |
+| protoc | 3.17 |
+| Docker | 27 |
+
+### Installing Build Tools
+
+<Tabs>
+  <Tab title="Cargo (Rust)">
+    Install Rust and Cargo using rustup:
+    
+    ```bash
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+    
+    Verify installation:
+    
+    ```bash
+    cargo --version
+    rustc --version
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    Install pnpm using npm or standalone:
+    
+    ```bash
+    # Using npm
+    npm install -g pnpm
+    
+    # Or using standalone installer
+    curl -fsSL https://get.pnpm.io/install.sh | sh -
+    ```
+    
+    Verify installation:
+    
+    ```bash
+    pnpm --version
+    ```
+  </Tab>
+  
+  <Tab title="protoc">
+    Install Protocol Buffer compiler:
+    
+    **macOS:**
+    ```bash
+    brew install protobuf
+    ```
+    
+    **Ubuntu/Debian:**
+    ```bash
+    sudo apt install -y protobuf-compiler
+    ```
+    
+    **From source:**
+    See [gRPC protoc installation guide](https://grpc.io/docs/protoc-installation/)
+    
+    Verify installation:
+    ```bash
+    protoc --version
+    ```
+  </Tab>
+  
+  <Tab title="Docker">
+    Install Docker and Docker Compose:
+    
+    Follow the official [Docker installation guide](https://docs.docker.com/get-docker/) for your platform.
+    
+    Verify installation:
+    ```bash
+    docker --version
+    docker compose version
+    ```
+  </Tab>
+</Tabs>
+
+## Build Process
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/meteroid-oss/meteroid.git
+cd meteroid
+```
+
+### 2. Build the Meteroid Module
+
+The main billing and API module:
+
+```bash
+cargo build -p meteroid
+```
+
+This compiles the Meteroid backend, including:
+- gRPC API server
+- REST API server
+- Database models and migrations
+- Business logic and services
+
+<Info>
+The first build may take several minutes as Cargo downloads and compiles all dependencies.
+</Info>
+
+### 3. Build the Metering Module (Optional)
+
+If you need usage metering capabilities:
+
+```bash
+cargo build -p metering
+```
+
+The metering module provides:
+- Event ingestion from Kafka
+- ClickHouse-based analytics
+- Usage aggregation and queries
+- gRPC metering API
+
+### 4. Build the Web Frontend
+
+Install and build the web application:
+
+```bash
+pnpm install --prefix modules/web
+```
+
+This installs dependencies for:
+- React-based web application
+- TypeScript definitions
+- UI component libraries
+- Generated gRPC clients
+
+## Build Binaries
+
+Meteroid provides several binary targets:
+
+### API Server
+
+```bash
+cargo build -p meteroid --bin meteroid-api --release
+```
+
+Standalone gRPC API server for production deployments.
+
+### Standalone Server
+
+```bash
+cargo build -p meteroid --bin standalone --release
+```
+
+Combined server (API + scheduler) for single-instance deployments.
+
+### Scheduler
+
+```bash
+cargo build -p meteroid --bin meteroid-scheduler --release
+```
+
+Background job processor for invoicing, payments, and automation.
+
+### Metering API
+
+```bash
+cargo build -p metering --bin metering-api --release
+```
+
+Metering and analytics API server.
+
+### OpenAPI Generator
+
+```bash
+cargo build -p meteroid --bin openapi-generate --release
+```
+
+Utility to generate OpenAPI specifications from code.
+
+<Note>
+The `--release` flag optimizes the build for production use. Omit it during development for faster compilation.
+</Note>
+
+## Build Artifacts
+
+After building, compiled binaries are located in:
+
+```
+target/debug/          # Development builds
+target/release/        # Production builds
+```
+
+## Cargo Workspace Structure
+
+Meteroid uses a Cargo workspace with multiple crates:
+
+### Main Modules
+
+- `modules/meteroid` - Core billing and API server
+- `modules/metering` - Usage metering and analytics
+- `modules/adapters/*` - Third-party integrations (OpenStack, SLURM)
+
+### Meteroid Crates
+
+- `meteroid-grpc` - gRPC service definitions
+- `meteroid-store` - Database access layer
+- `meteroid-invoicing` - Invoice generation engine
+- `meteroid-mailer` - Email service
+- `meteroid-oauth` - OAuth integrations
+- `meteroid-tax` - Tax calculation
+- `stripe-client` - Stripe integration
+- `hubspot-client` - HubSpot integration
+- `pennylane-client` - Pennylane integration
+
+### Common Crates
+
+- `common-config` - Configuration management
+- `common-grpc` - Shared gRPC utilities
+- `common-logging` - Observability and tracing
+- `common-domain` - Domain models
+- `common-eventbus` - Event-driven architecture
+- `kafka` - Kafka client wrapper
+- `distributed-lock` - Distributed locking primitives
+
+## Development Builds
+
+For faster iteration during development:
+
+```bash
+# Build only the main meteroid package
+cargo build -p meteroid
+
+# Build with specific features
+cargo build -p meteroid --features metering-server
+
+# Run without building
+cargo run -p meteroid --bin standalone
+```
+
+## Testing Builds
+
+Run tests to verify your build:
+
+```bash
+# Run all tests
+cargo test
+
+# Run tests for a specific package
+cargo test -p meteroid
+
+# Run tests with metering features
+cargo test -p meteroid --features metering-server
+```
+
+## Incremental Builds
+
+Cargo caches compiled dependencies. To speed up rebuilds:
+
+```bash
+# Clean build artifacts (forces full rebuild)
+cargo clean
+
+# Clean and rebuild
+cargo clean && cargo build
+
+# Update dependencies
+cargo update
+```
+
+## Web Frontend Builds
+
+### Development Build
+
+```bash
+pnpm --prefix modules/web/web-app run dev
+```
+
+Starts development server with hot reload at http://localhost:5173
+
+### Production Build
+
+```bash
+pnpm --prefix modules/web/web-app run build
+```
+
+Creates optimized production bundle in `modules/web/web-app/dist`
+
+## Troubleshooting
+
+### Protobuf Errors
+
+If you see protobuf-related errors:
+
+```bash
+# Ensure protoc is installed
+protoc --version
+
+# Reinstall protobuf dependencies
+cargo clean
+cargo build
+```
+
+### Docker Permission Errors
+
+If Docker commands fail:
+
+```bash
+# Add your user to the docker group (Linux)
+sudo usermod -aG docker $USER
+
+# Apply group changes
+newgrp docker
+```
+
+### Out of Memory
+
+For large builds on systems with limited memory:
+
+```bash
+# Reduce parallel jobs
+cargo build -j 2
+
+# Or build in release mode (uses less memory)
+cargo build --release
+```
+
+### Node/pnpm Issues
+
+```bash
+# Clear pnpm cache
+pnpm store prune
+
+# Remove node_modules and reinstall
+rm -rf modules/web/node_modules
+pnpm install --prefix modules/web
+```
+
+## Next Steps
+
+- Review the [architecture overview](/development/architecture-overview)
+- Follow the [contributing guide](/development/contributing)
+- Learn about [deployment options](/deployment/overview)

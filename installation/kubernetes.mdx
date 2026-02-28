@@ -1,0 +1,516 @@
+---
+title: Kubernetes & Helm
+description: Deploy Meteroid on Kubernetes using Helm charts
+---
+
+<Note>
+  The Meteroid Helm chart is a **community-maintained resource**. For production deployments requiring enterprise support, please contact the Meteroid team.
+</Note>
+
+Deploy Meteroid on Kubernetes using the official Helm chart. This guide covers installation, configuration, and production best practices.
+
+## Prerequisites
+
+- Kubernetes 1.19+
+- Helm 3.8+
+- kubectl configured to access your cluster
+- At least 4GB of RAM and 2 CPU cores available
+
+## Quick Start
+
+<Steps>
+  <Step title="Add Helm repository">
+    Clone the Meteroid repository to access the Helm chart:
+
+    ```bash
+    git clone https://github.com/meteroid-oss/meteroid.git
+    cd meteroid/k8s/meteroid
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Update Helm dependencies (PostgreSQL and Kafka):
+
+    ```bash
+    helm dependency update
+    ```
+
+    This will download:
+    - Bitnami PostgreSQL chart (v16.x)
+    - Bitnami Kafka chart (v31.3.1)
+  </Step>
+
+  <Step title="Create values file">
+    Create a `custom-values.yaml` file with your configuration:
+
+    ```yaml
+    global:
+      publicAppUrl: "https://meteroid.example.com"
+      publicApiUrl: "https://api.meteroid.example.com"
+      publicRestApiUrl: "https://api.meteroid.example.com/api"
+
+      secrets:
+        jwtPrivateKey: "your-jwt-secret"
+        internalApiSecret: "your-internal-api-secret"
+        secretsCryptkey: "your-32-character-encryption-key"
+        databaseUrl: ""  # Auto-configured if postgresql.enabled=true
+
+    ingress:
+      enabled: true
+      className: nginx
+      hosts:
+        - host: meteroid.example.com
+          paths:
+            - path: /
+              pathType: Prefix
+              service: web
+              port: 80
+        - host: api.meteroid.example.com
+          paths:
+            - path: /
+              pathType: Prefix
+              service: api
+              port: 50061
+            - path: /api
+              pathType: Prefix
+              service: api
+              port: 8080
+
+    postgresql:
+      enabled: true
+      auth:
+        password: "your-secure-password"
+        database: meteroid
+
+    kafka:
+      enabled: true
+
+    clickhouse:
+      enabled: true
+      auth:
+        username: "meteroid"
+        password: "your-clickhouse-password"
+    ```
+  </Step>
+
+  <Step title="Install the chart">
+    ```bash
+    helm install meteroid . -f custom-values.yaml
+    ```
+
+    Or install in a specific namespace:
+
+    ```bash
+    kubectl create namespace meteroid
+    helm install meteroid . -f custom-values.yaml -n meteroid
+    ```
+  </Step>
+
+  <Step title="Verify installation">
+    Check pod status:
+
+    ```bash
+    kubectl get pods -n meteroid
+    ```
+
+    Wait for all pods to be ready:
+
+    ```bash
+    kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=meteroid -n meteroid --timeout=300s
+    ```
+  </Step>
+</Steps>
+
+## Architecture
+
+The Helm chart deploys the following components:
+
+### Core Services
+
+<ParamField path="api" type="Deployment">
+  Meteroid billing API service (gRPC + REST)
+  
+  - **Ports**: 50061 (gRPC), 8080 (HTTP)
+  - **Replicas**: 1 (configurable with HPA)
+  - **Image**: `ghcr.io/meteroid-oss/meteroid-api:tip`
+</ParamField>
+
+<ParamField path="metering" type="Deployment">
+  Usage metering and event ingestion service
+  
+  - **Ports**: 50062 (gRPC), 8081 (HTTP)
+  - **Replicas**: 1 (configurable with HPA)
+  - **Image**: `ghcr.io/meteroid-oss/metering-api:tip`
+</ParamField>
+
+<ParamField path="scheduler" type="Deployment">
+  Background job processor for billing cycles and invoices
+  
+  - **Replicas**: 1
+  - **Image**: `ghcr.io/meteroid-oss/meteroid-scheduler:tip`
+</ParamField>
+
+<ParamField path="web" type="Deployment">
+  Web dashboard and UI
+  
+  - **Port**: 80
+  - **Replicas**: 1 (configurable with HPA)
+  - **Image**: `ghcr.io/meteroid-oss/meteroid-web:tip`
+</ParamField>
+
+### Dependencies
+
+<ParamField path="postgresql" type="StatefulSet">
+  Primary database (Bitnami PostgreSQL chart)
+  
+  - **Version**: 16.x
+  - **Storage**: 1Gi (configurable)
+  - **Condition**: `postgresql.enabled=true`
+</ParamField>
+
+<ParamField path="kafka" type="StatefulSet">
+  Event streaming platform (Bitnami Kafka chart)
+  
+  - **Version**: 31.3.1
+  - **Replicas**: 1 (configurable)
+  - **Condition**: `kafka.enabled=true`
+</ParamField>
+
+<ParamField path="clickhouse" type="StatefulSet">
+  Analytics database for usage data
+  
+  - **Version**: 24.2.2
+  - **Storage**: 10Gi (configurable)
+  - **Condition**: `clickhouse.enabled=true`
+</ParamField>
+
+## Configuration
+
+### Global Settings
+
+<ParamField path="global.publicAppUrl" type="string" required>
+  Public URL where the web UI is accessible
+  
+  ```yaml
+  global:
+    publicAppUrl: "https://meteroid.example.com"
+  ```
+</ParamField>
+
+<ParamField path="global.publicApiUrl" type="string" required>
+  Public URL for the gRPC API endpoint
+  
+  ```yaml
+  global:
+    publicApiUrl: "https://api.meteroid.example.com"
+  ```
+</ParamField>
+
+<ParamField path="global.publicRestApiUrl" type="string" required>
+  Public URL for the REST API endpoint
+  
+  ```yaml
+  global:
+    publicRestApiUrl: "https://api.meteroid.example.com/api"
+  ```
+</ParamField>
+
+### Secrets Management
+
+<ParamField path="global.secrets.existingSecretName" type="string">
+  Use an existing Kubernetes secret instead of creating one
+  
+  ```yaml
+  global:
+    secrets:
+      existingSecretName: "meteroid-secrets"
+  ```
+</ParamField>
+
+<ParamField path="global.secrets.jwtPrivateKey" type="string" required>
+  JWT secret for authentication tokens
+</ParamField>
+
+<ParamField path="global.secrets.internalApiSecret" type="string" required>
+  Secret for internal service-to-service communication
+</ParamField>
+
+<ParamField path="global.secrets.secretsCryptkey" type="string" required>
+  32-character encryption key for sensitive data
+  
+  <Warning>Must be exactly 32 characters long</Warning>
+</ParamField>
+
+<ParamField path="global.secrets.svixJwtToken" type="string">
+  Svix JWT token for webhook delivery (optional)
+</ParamField>
+
+### OAuth Configuration
+
+<ParamField path="global.secrets.oauthGoogle" type="object">
+  Google OAuth credentials
+  
+  ```yaml
+  global:
+    secrets:
+      oauthGoogle:
+        clientId: "your-client-id"
+        clientSecret: "your-client-secret"
+  ```
+</ParamField>
+
+### Ingress Configuration
+
+<ParamField path="ingress.enabled" type="boolean" default="true">
+  Enable ingress resource creation
+</ParamField>
+
+<ParamField path="ingress.useIngressRoute" type="boolean" default="false">
+  Use Traefik IngressRoute CRD instead of standard Ingress
+  
+  Set to `true` for Traefik with rate limiting support.
+</ParamField>
+
+<ParamField path="ingress.className" type="string" default="nginx">
+  Ingress class name (e.g., `nginx`, `traefik`)
+</ParamField>
+
+<ParamField path="ingress.hosts" type="array" required>
+  List of ingress hosts and paths
+  
+  ```yaml
+  ingress:
+    hosts:
+      - host: meteroid.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+            service: web
+            port: 80
+      - host: api.meteroid.example.com
+        rateLimit:  # Traefik only
+          perIp:
+            average: 100
+            burst: 50
+        paths:
+          - path: /
+            pathType: Prefix
+            service: api
+            port: 50061
+  ```
+</ParamField>
+
+### Resource Configuration
+
+<ParamField path="api.resources" type="object">
+  CPU and memory resource requests/limits for the API service
+  
+  ```yaml
+  api:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  ```
+</ParamField>
+
+### Autoscaling
+
+<ParamField path="api.autoscaling" type="object">
+  Horizontal Pod Autoscaler configuration
+  
+  ```yaml
+  api:
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 80
+  ```
+</ParamField>
+
+### External Services
+
+Disable bundled dependencies and use external services:
+
+```yaml
+postgresql:
+  enabled: false
+
+kafka:
+  enabled: false
+
+clickhouse:
+  enabled: false
+
+global:
+  secrets:
+    databaseUrl: "postgres://user:pass@external-db:5432/meteroid"
+  
+  kafka:
+    bootstrapServers: "kafka.example.com:9092"
+  
+  clickhouse:
+    httpAddress: "http://clickhouse.example.com:8123"
+    tcpAddress: "clickhouse.example.com:9000"
+    database: "meteroid"
+    username: "meteroid"
+```
+
+## Production Recommendations
+
+### High Availability
+
+```yaml
+api:
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+
+metering:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+
+postgresql:
+  primary:
+    persistence:
+      size: 50Gi
+  readReplicas:
+    replicaCount: 1
+
+kafka:
+  broker:
+    replicaCount: 3
+  zookeeper:
+    replicaCount: 3
+
+clickhouse:
+  persistence:
+    size: 100Gi
+```
+
+### Security
+
+```yaml
+meteroid:
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT:role/meteroid"
+```
+
+### Observability
+
+```yaml
+global:
+  telemetry:
+    tracingEnabled: true
+    metricsEnabled: true
+    otelEndpoint: "http://otel-collector:4317"
+```
+
+### Object Storage
+
+```yaml
+global:
+  objectStore:
+    uri: "s3://meteroid-production"
+  secrets:
+    objectStore:
+      accessKeyId: "your-access-key"
+      secretAccessKey: "your-secret-key"
+```
+
+## Upgrading
+
+### Update the chart
+
+```bash
+helm upgrade meteroid . -f custom-values.yaml -n meteroid
+```
+
+### Upgrade to a specific version
+
+```yaml
+version: "v0.5.0"
+
+api:
+  image:
+    tag: "v0.5.0"
+
+metering:
+  image:
+    tag: "v0.5.0"
+
+scheduler:
+  image:
+    tag: "v0.5.0"
+
+web:
+  image:
+    tag: "v0.5.0"
+```
+
+## Uninstalling
+
+```bash
+helm uninstall meteroid -n meteroid
+```
+
+To also delete persistent data:
+
+```bash
+kubectl delete pvc -l app.kubernetes.io/name=meteroid -n meteroid
+```
+
+## Troubleshooting
+
+### Check pod logs
+
+```bash
+kubectl logs -l app=meteroid-api -n meteroid --tail=100 -f
+kubectl logs -l app=meteroid-metering -n meteroid --tail=100 -f
+```
+
+### Debug database connectivity
+
+```bash
+kubectl exec -it deployment/meteroid-api -n meteroid -- /bin/sh
+# Test database connection
+psql $DATABASE_URL
+```
+
+### Check service health
+
+```bash
+kubectl port-forward svc/meteroid-api 8084:8080 -n meteroid
+curl http://localhost:8084/health
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration Reference" icon="gear" href="/installation/configuration">
+    Complete configuration options
+  </Card>
+  <Card title="Docker Compose" icon="docker" href="/installation/docker-compose">
+    Alternative deployment method
+  </Card>
+</CardGroup>

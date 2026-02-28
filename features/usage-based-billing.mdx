@@ -1,0 +1,114 @@
+---
+title: "Usage-based Billing"
+description: "Bill customers based on their actual usage with real-time metering and flexible pricing models"
+---
+
+Meteroid's usage-based billing enables you to charge customers based on their actual consumption, aligning pricing with value delivered. Track any metric that matters to your business and bill accordingly.
+
+## Key Capabilities
+
+<CardGroup cols={2}>
+  <Card title="Real-time Metering" icon="gauge">
+    Ingest usage events in real-time and aggregate them for billing
+  </Card>
+  <Card title="Flexible Aggregations" icon="calculator">
+    COUNT, SUM, AVG, MAX, MIN, LATEST, and COUNT_DISTINCT
+  </Card>
+  <Card title="Multi-dimensional" icon="cube">
+    Segment usage by region, tier, feature, or custom dimensions
+  </Card>
+  <Card title="Instant Visibility" icon="eye">
+    View current usage at any time through dashboards and APIs
+  </Card>
+</CardGroup>
+
+## How It Works
+
+<Steps>
+  <Step title="Define Billable Metrics">
+    Create billable metrics for the usage you want to track (API calls, compute hours, storage GB, etc.)
+  </Step>
+  <Step title="Ingest Usage Events">
+    Send usage events from your application to Meteroid's metering API
+  </Step>
+  <Step title="Configure Pricing">
+    Set up pricing models (per-unit, tiered, volume) based on your billable metrics
+  </Step>
+  <Step title="Automatic Billing">
+    Meteroid automatically aggregates usage and generates invoices
+  </Step>
+</Steps>
+
+## Pricing Models
+
+### Per-Unit Pricing
+Charge a fixed rate per unit consumed.
+
+**Example**: $0.10 per API call
+
+### Tiered Pricing
+Different rates for different usage ranges.
+
+**Example**:
+- 0-10,000 API calls: $0.10 each
+- 10,001-100,000: $0.08 each
+- 100,001+: $0.05 each
+
+### Volume Pricing
+Rate applies to entire volume based on highest tier reached.
+
+**Example**: If you use 15,000 API calls, all 15,000 are charged at $0.08 each.
+
+### Package Pricing
+Bundles of units with overage charges.
+
+**Example**: $100 for 10,000 API calls, then $0.015 per additional call
+
+## Common Use Cases
+
+<AccordionGroup>
+  <Accordion title="API Monetization">
+    Bill customers based on API requests, with different rates for different endpoints or plans.
+    
+    **Metrics**: API calls, specific endpoint usage
+    **Model**: Tiered or per-unit pricing
+  </Accordion>
+  
+  <Accordion title="Infrastructure Usage">
+    Charge for compute, storage, or bandwidth consumption.
+    
+    **Metrics**: CPU hours, GB stored, GB transferred
+    **Model**: Per-unit or tiered pricing
+  </Accordion>
+  
+  <Accordion title="Feature Usage">
+    Bill for specific features like AI credits, SMS messages, or reports generated.
+    
+    **Metrics**: Credits consumed, messages sent, reports created
+    **Model**: Package or per-unit pricing
+  </Accordion>
+  
+  <Accordion title="Multi-dimensional Billing">
+    Charge different rates based on region, environment, or customer tier.
+    
+    **Metrics**: Any metric with dimensional segmentation
+    **Model**: Matrix pricing with dimension-based rates
+  </Accordion>
+</AccordionGroup>
+
+## Benefits
+
+- **Fair Pricing**: Customers only pay for what they use
+- **Revenue Growth**: Charges scale automatically with customer success
+- **Price Transparency**: Clear visibility into usage and costs
+- **Flexible Models**: Support any usage-based pricing structure
+- **Real-time Data**: Current usage available instantly
+
+<CardGroup cols={2}>
+  <Card title="Track Usage" icon="chart-line" href="/guides/tracking-usage">
+    Learn how to implement usage tracking
+  </Card>
+  <Card title="Billable Metrics" icon="ruler" href="/concepts/metering">
+    Understand billable metrics and aggregations
+  </Card>
+</CardGroup>

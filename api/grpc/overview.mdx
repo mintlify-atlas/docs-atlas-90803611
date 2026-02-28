@@ -1,0 +1,76 @@
+---
+title: 'gRPC API Overview'
+description: 'Complete reference for Meteroid gRPC API services'
+---
+
+## Introduction
+
+Meteroid provides a comprehensive gRPC API for managing billing, subscriptions, invoicing, and customer data. The API is organized into focused services that handle specific business domains.
+
+## Available Services
+
+### Core Billing Services
+
+<CardGroup cols={2}>
+  <Card title="Customers" icon="users" href="/api/grpc/customers">
+    Manage customer records, balances, and connections
+  </Card>
+  <Card title="Subscriptions" icon="calendar-check" href="/api/grpc/subscriptions">
+    Create and manage customer subscriptions
+  </Card>
+  <Card title="Invoices" icon="file-invoice" href="/api/grpc/invoices">
+    Generate, manage, and finalize invoices
+  </Card>
+  <Card title="Plans" icon="layer-group" href="/api/grpc/plans">
+    Define and version pricing plans
+  </Card>
+</CardGroup>
+
+### Additional Services
+
+<CardGroup cols={2}>
+  <Card title="Billable Metrics" icon="chart-line" href="/api/grpc/billable-metrics">
+    Configure usage-based billing metrics
+  </Card>
+  <Card title="Addons" icon="puzzle-piece" href="/api/grpc/addons">
+    Manage plan add-ons and extensions
+  </Card>
+  <Card title="Coupons" icon="ticket" href="/api/grpc/coupons">
+    Create and apply discount coupons
+  </Card>
+  <Card title="Organizations" icon="building" href="/api/grpc/organizations">
+    Manage organization settings
+  </Card>
+</CardGroup>
+
+## Protocol Buffers
+
+All services are defined using Protocol Buffers v3. The proto files are located in `modules/meteroid/proto/api/`.
+
+## Authentication
+
+All gRPC endpoints require authentication. Refer to the authentication documentation for details on how to authenticate your requests.
+
+## Error Handling
+
+The API uses standard gRPC status codes for error responses:
+
+- `OK` (0): Success
+- `INVALID_ARGUMENT` (3): Invalid request parameters
+- `NOT_FOUND` (5): Resource not found
+- `ALREADY_EXISTS` (6): Resource already exists
+- `PERMISSION_DENIED` (7): Insufficient permissions
+- `INTERNAL` (13): Internal server error
+
+## Pagination
+
+Many list endpoints support pagination using the `meteroid.common.v1.Pagination` message:
+
+```protobuf
+message Pagination {
+  uint32 limit = 1;
+  uint32 offset = 2;
+}
+```
+
+Responses include a `PaginationResponse` with metadata about the total count and current page.

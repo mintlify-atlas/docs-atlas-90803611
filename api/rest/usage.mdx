@@ -1,0 +1,294 @@
+---
+title: "Usage"
+description: "Query aggregated usage data for customers and subscriptions"
+---
+
+Retrieve aggregated usage data for billing and analytics. Usage is calculated based on ingested events and billable metric configurations.
+
+## Get Customer Usage
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/usage/customer/{customer_id}?start_date=2024-01-01&end_date=2024-01-31" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/usage/customer/{customer_id}`
+
+Retrieve aggregated usage data for a customer over a specified period.
+
+### Path Parameters
+
+<ParamField path="customer_id" type="string" required>
+  Customer ID or alias
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="start_date" type="string (date)" required>
+  Start date in YYYY-MM-DD format
+</ParamField>
+
+<ParamField query="end_date" type="string (date)" required>
+  End date in YYYY-MM-DD format
+</ParamField>
+
+<ParamField query="metric_id" type="string">
+  Filter by specific metric ID
+</ParamField>
+
+### Response
+
+<ResponseField name="usage" type="array">
+  Array of metric usage data
+  
+  <Expandable title="MetricUsage properties">
+    <ResponseField name="metric_id" type="string" required>
+      Metric ID
+    </ResponseField>
+    
+    <ResponseField name="metric_name" type="string" required>
+      Metric name
+    </ResponseField>
+    
+    <ResponseField name="metric_code" type="string" required>
+      Metric code
+    </ResponseField>
+    
+    <ResponseField name="total_value" type="string (decimal)" required>
+      Total aggregated value for the period
+    </ResponseField>
+    
+    <ResponseField name="grouped_usage" type="array" required>
+      Usage broken down by dimensions
+      
+      <Expandable title="GroupedUsage properties">
+        <ResponseField name="value" type="string (decimal)" required>
+          Aggregated value for this group
+        </ResponseField>
+        
+        <ResponseField name="dimensions" type="object" required>
+          Dimension key-value pairs (e.g., `region: "us-east-1"`)
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "usage": [
+    {
+      "metric_id": "bm_7n42DGM5Tflk9n8mt7Fhc7",
+      "metric_name": "API Requests",
+      "metric_code": "api_requests",
+      "total_value": "15000",
+      "grouped_usage": [
+        {
+          "value": "10000",
+          "dimensions": {
+            "region": "us-east-1"
+          }
+        },
+        {
+          "value": "5000",
+          "dimensions": {
+            "region": "eu-west-1"
+          }
+        }
+      ]
+    },
+    {
+      "metric_id": "bm_8n42DGM5Tflk9n8mt7Fhc8",
+      "metric_name": "Storage GB",
+      "metric_code": "storage_gb",
+      "total_value": "250.5",
+      "grouped_usage": [
+        {
+          "value": "250.5",
+          "dimensions": {}
+        }
+      ]
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Get Subscription Usage
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/usage/subscription/{subscription_id}" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/usage/subscription/{subscription_id}`
+
+Retrieve aggregated usage data for a subscription's usage-based components. If start_date/end_date are omitted, defaults to the current billing period.
+
+### Path Parameters
+
+<ParamField path="subscription_id" type="string" required>
+  Subscription ID
+</ParamField>
+
+### Query Parameters
+
+<ParamField query="start_date" type="string (date)">
+  Start date in YYYY-MM-DD format (defaults to current period start)
+</ParamField>
+
+<ParamField query="end_date" type="string (date)">
+  End date in YYYY-MM-DD format (defaults to current period end)
+</ParamField>
+
+<ParamField query="metric_id" type="string">
+  Filter by specific metric ID
+</ParamField>
+
+### Response
+
+<ResponseField name="usage" type="array">
+  Array of metric usage data for the subscription
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "usage": [
+    {
+      "metric_id": "bm_7n42DGM5Tflk9n8mt7Fhc7",
+      "metric_name": "API Requests",
+      "metric_code": "api_requests",
+      "total_value": "8500",
+      "grouped_usage": [
+        {
+          "value": "8500",
+          "dimensions": {}
+        }
+      ]
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Get Usage Summary
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/usage/summary?start_date=2024-01-01&end_date=2024-01-31" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/usage/summary`
+
+Retrieve aggregated usage data across all customers for the tenant.
+
+### Query Parameters
+
+<ParamField query="start_date" type="string (date)" required>
+  Start date in YYYY-MM-DD format
+</ParamField>
+
+<ParamField query="end_date" type="string (date)" required>
+  End date in YYYY-MM-DD format
+</ParamField>
+
+<ParamField query="metric_id" type="string">
+  Filter by specific metric ID
+</ParamField>
+
+### Response
+
+<ResponseField name="usage" type="array">
+  Aggregated usage across all customers
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "usage": [
+    {
+      "metric_id": "bm_7n42DGM5Tflk9n8mt7Fhc7",
+      "metric_name": "API Requests",
+      "metric_code": "api_requests",
+      "total_value": "1500000",
+      "grouped_usage": [
+        {
+          "value": "1000000",
+          "dimensions": {
+            "region": "us-east-1"
+          }
+        },
+        {
+          "value": "500000",
+          "dimensions": {
+            "region": "eu-west-1"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Usage Aggregation
+
+Usage data is aggregated based on your billable metric configuration:
+
+### Aggregation Types
+
+- **COUNT** - Count of events
+- **SUM** - Sum of a numeric property
+- **MAX** - Maximum value of a property
+- **MIN** - Minimum value of a property
+- **MEAN** - Average value of a property
+- **LATEST** - Most recent property value
+- **COUNT_DISTINCT** - Count of unique property values
+
+### Dimensional Grouping
+
+If your metrics use segmentation matrices, usage is grouped by dimension values (e.g., region, tier, SKU).
+
+### Time Periods
+
+- Usage queries are inclusive of start_date and end_date
+- For subscription usage without dates, the current billing period is used
+- Historical usage can be queried for any past period
+
+## Example Use Cases
+
+### Current Billing Period Usage
+
+```bash
+curl -X GET "https://api.meteroid.com/api/v1/usage/subscription/sub_123" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Month-to-Date Usage
+
+```bash
+curl -X GET "https://api.meteroid.com/api/v1/usage/customer/cus_123?start_date=2024-01-01&end_date=2024-01-31" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Specific Metric Usage
+
+```bash
+curl -X GET "https://api.meteroid.com/api/v1/usage/customer/cus_123?start_date=2024-01-01&end_date=2024-01-31&metric_id=bm_123" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Tenant-Wide Analytics
+
+```bash
+curl -X GET "https://api.meteroid.com/api/v1/usage/summary?start_date=2024-01-01&end_date=2024-01-31" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```

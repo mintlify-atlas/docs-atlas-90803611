@@ -1,0 +1,127 @@
+---
+title: 'Integrations Overview'
+description: 'Connect Meteroid with your favorite business tools and payment providers'
+icon: 'puzzle-piece'
+---
+
+Meteroid provides seamless integrations with popular payment providers, CRM systems, and accounting platforms to streamline your billing operations.
+
+## Available Integrations
+
+<CardGroup cols={2}>
+  <Card title="Stripe" icon="stripe" href="/integrations/stripe">
+    Process payments and manage subscriptions with Stripe
+  </Card>
+  
+  <Card title="HubSpot" icon="hubspot" href="#hubspot">
+    Sync customers, deals, and billing data with HubSpot CRM
+  </Card>
+  
+  <Card title="Pennylane" icon="receipt" href="#pennylane">
+    Export invoices and manage accounting with Pennylane
+  </Card>
+  
+  <Card title="Webhooks" icon="webhook" href="/integrations/webhooks">
+    Receive real-time notifications for billing events
+  </Card>
+</CardGroup>
+
+## Payment Providers
+
+### Stripe
+
+Meteroid integrates deeply with Stripe to enable:
+- Payment method management
+- Payment intent processing
+- Setup intents for saved payment methods
+- Customer synchronization
+- Invoice reconciliation
+- Webhook event handling
+
+[Learn more about the Stripe integration →](/integrations/stripe)
+
+## CRM Integrations
+
+### HubSpot
+
+Connect Meteroid with HubSpot to:
+- **Sync customers** - Automatically create and update HubSpot contacts and companies
+- **Track deals** - Link subscriptions to HubSpot deals
+- **Manage associations** - Connect customers with their billing records
+- **Update properties** - Keep billing data synchronized
+
+**Rate Limits**: 110 requests per 10 seconds per installed app
+
+**Configuration**:
+```bash
+HUBSPOT_ACCESS_TOKEN=your_access_token
+```
+
+**Available Operations**:
+- Companies API - Create and update company records
+- Deals API - Manage deal lifecycle
+- Associations API - Link related objects
+- Properties API - Sync custom fields
+
+## Accounting Integrations
+
+### Pennylane
+
+Integrate with Pennylane for French accounting compliance:
+- **Customer export** - Sync customer data to Pennylane
+- **Invoice export** - Send finalized invoices automatically
+- **VAT management** - Apply correct VAT rates
+- **File attachments** - Attach PDF invoices
+
+**Rate Limits**: 5 requests per second per token
+
+**Configuration**:
+```bash
+PENNYLANE_ACCESS_TOKEN=your_access_token
+PENNYLANE_API_URL=https://app.pennylane.com
+```
+
+**Available Operations**:
+- Customer management
+- Invoice creation and export
+- VAT rate application
+- Document attachments
+
+## Webhook Notifications
+
+Meteroid uses **Svix** to deliver reliable, secure webhooks for all billing events. Webhooks enable you to:
+- React to billing events in real-time
+- Integrate with custom systems
+- Trigger workflows and automations
+- Keep external systems synchronized
+
+[Learn more about webhooks →](/integrations/webhooks)
+
+## Integration Architecture
+
+All Meteroid integrations are built with:
+- **Automatic retries** - Exponential backoff for failed requests
+- **Rate limiting** - Respect API limits with built-in throttling
+- **Error handling** - Graceful degradation and error reporting
+- **Middleware support** - Retry and rate limit middleware
+- **Secure credentials** - Secret management with encryption
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configure Stripe" icon="stripe" href="/integrations/stripe">
+    Set up payment processing
+  </Card>
+  
+  <Card title="Setup Webhooks" icon="webhook" href="/integrations/webhooks">
+    Configure event notifications
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Explore the REST and gRPC APIs
+  </Card>
+  
+  <Card title="Development Guide" icon="terminal" href="/development">
+    Local development setup
+  </Card>
+</CardGroup>

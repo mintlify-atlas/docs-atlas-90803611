@@ -1,0 +1,365 @@
+---
+title: "Coupons & Discounts"
+description: "Promotional pricing, discounts, and coupon management"
+---
+
+Meteroid supports flexible coupon and discount strategies to drive customer acquisition, retention, and expansion.
+
+## Coupon Types
+
+<CardGroup cols={2}>
+  <Card title="Percentage Off" icon="percent">
+    Reduce price by a percentage (e.g., 20% off for 3 months)
+  </Card>
+  <Card title="Fixed Amount" icon="dollar-sign">
+    Reduce price by a fixed amount (e.g., $50 off first invoice)
+  </Card>
+  <Card title="Free Trial" icon="clock">
+    Extended trial period (e.g., 30 days free instead of 14)
+  </Card>
+  <Card title="One-time" icon="ticket">
+    Applies once to first invoice only
+  </Card>
+</CardGroup>
+
+## Creating Coupons
+
+Create coupons via the web UI or API:
+
+```typescript
+const coupon = await meteroid.coupons.create({
+  code: "LAUNCH20",
+  description: "20% off for 3 months",
+  discount_type: "percentage",
+  discount_value: 20,
+  duration: "repeating",
+  duration_in_months: 3,
+  max_redemptions: 100,
+  expires_at: "2024-12-31"
+});
+```
+
+## Coupon Configuration
+
+### Discount Types
+
+<Tabs>
+  <Tab title="Percentage">
+    **Percentage discount** applied to subscription total:
+    
+    ```typescript
+    {
+      "code": "SAVE25",
+      "discount_type": "percentage",
+      "discount_value": 25  // 25% off
+    }
+    ```
+    
+    **Example**:
+    - Subscription: $100/month
+    - Discount: 25%
+    - **Customer pays: $75/month**
+  </Tab>
+  
+  <Tab title="Fixed Amount">
+    **Fixed dollar amount** off subscription:
+    
+    ```typescript
+    {
+      "code": "WELCOME50",
+      "discount_type": "fixed",
+      "discount_value": 50,  // $50 off
+      "currency": "USD"
+    }
+    ```
+    
+    **Example**:
+    - Subscription: $100/month
+    - Discount: $50
+    - **Customer pays: $50/month**
+  </Tab>
+</Tabs>
+
+### Duration
+
+Control how long the discount applies:
+
+<AccordionGroup>
+  <Accordion title="One-time">
+    Applies only to the first invoice.
+    
+    ```typescript
+    {
+      "duration": "once"
+    }
+    ```
+    
+    **Use case**: Welcome discount, promotional offer
+  </Accordion>
+  
+  <Accordion title="Repeating">
+    Applies for a specified number of billing cycles.
+    
+    ```typescript
+    {
+      "duration": "repeating",
+      "duration_in_months": 3  // Apply for 3 months
+    }
+    ```
+    
+    **Use case**: Limited-time promotion, seasonal offer
+  </Accordion>
+  
+  <Accordion title="Forever">
+    Applies to all future invoices.
+    
+    ```typescript
+    {
+      "duration": "forever"
+    }
+    ```
+    
+    **Use case**: Loyalty discount, special pricing for specific customers
+    
+    <Warning>
+    Use forever discounts carefully as they permanently reduce revenue.
+    </Warning>
+  </Accordion>
+</AccordionGroup>
+
+## Redemption Limits
+
+### Max Redemptions
+Limit total number of times a coupon can be used:
+
+```typescript
+{
+  "code": "EARLYBIRD",
+  "max_redemptions": 50  // First 50 customers only
+}
+```
+
+### Expiration Date
+Set when the coupon expires:
+
+```typescript
+{
+  "code": "SUMMER2024",
+  "expires_at": "2024-08-31T23:59:59Z"
+}
+```
+
+### Per-customer Limit
+Limit to one redemption per customer:
+
+```typescript
+{
+  "code": "FIRSTTIME",
+  "redeem_by_customer": true,  // Each customer can use once
+  "max_redemptions": null      // No overall limit
+}
+```
+
+## Applying Coupons
+
+### During Checkout
+Customers can enter coupon codes at checkout:
+
+```typescript
+// Checkout with pre-applied coupon
+await meteroid.checkout.create({
+  customer_id: "cust_abc",
+  plan_id: "plan_pro",
+  coupon_code: "LAUNCH20"
+});
+
+// Or let customer enter code in checkout UI
+```
+
+### Programmatically
+Apply coupons directly to subscriptions:
+
+```typescript
+await meteroid.subscriptions.update({
+  subscription_id: "sub_xyz",
+  coupon_code: "LOYALTY15"
+});
+```
+
+### Via Admin
+Manually apply coupons in the web UI for customer support scenarios.
+
+## Common Discount Strategies
+
+### Welcome Discount
+Encourage sign-ups with a first-month discount:
+
+```typescript
+{
+  "code": "WELCOME",
+  "discount_type": "percentage",
+  "discount_value": 50,
+  "duration": "once"
+}
+```
+
+### Extended Trial
+Offer longer trial periods:
+
+```typescript
+{
+  "code": "TRIAL60",
+  "trial_days": 60  // Override default 14-day trial
+}
+```
+
+### Seasonal Promotion
+Time-limited promotional offers:
+
+```typescript
+{
+  "code": "BLACKFRIDAY",
+  "discount_type": "percentage",
+  "discount_value": 35,
+  "duration": "repeating",
+  "duration_in_months": 12,
+  "expires_at": "2024-11-30",
+  "max_redemptions": 500
+}
+```
+
+### Referral Discount
+Reward customers who refer others:
+
+```typescript
+// Unique code per referrer
+{
+  "code": `REFERRAL_${referrer_id}`,
+  "discount_type": "fixed",
+  "discount_value": 25,
+  "duration": "once",
+  "redeem_by_customer": true
+}
+```
+
+### Loyalty Discount
+Reward long-term customers:
+
+```typescript
+{
+  "code": "LOYAL_CUSTOMER",
+  "discount_type": "percentage",
+  "discount_value": 15,
+  "duration": "forever"
+}
+```
+
+## Discount Application Rules
+
+### What Gets Discounted
+
+Coupons apply to:
+- ✅ Recurring subscription fees
+- ✅ One-time setup fees (if configured)
+- ❌ Usage-based charges (excluded by default)
+- ❌ Taxes
+
+### Multiple Coupons
+
+<Note>
+Only one coupon can be active per subscription at a time. Applying a new coupon replaces the existing one.
+</Note>
+
+### Minimum Purchase
+
+Require minimum subscription value:
+
+```typescript
+{
+  "code": "BIG50",
+  "discount_type": "fixed",
+  "discount_value": 50,
+  "minimum_amount": 200  // Requires $200+ subscription
+}
+```
+
+## Analytics
+
+Track coupon performance:
+
+- **Redemptions**: Total times used
+- **Revenue impact**: Total discount given
+- **Conversion rate**: Checkouts with vs without coupon
+- **Customer LTV**: Compare coupon users to non-coupon users
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Coupon Code Design">
+    **Create memorable, meaningful codes**:
+    
+    ✅ Good codes:
+    - `LAUNCH20` (clear purpose and value)
+    - `SUMMER2024` (seasonal context)
+    - `FRIEND25` (referral indication)
+    
+    ❌ Avoid:
+    - `PROMO1` (generic, forgettable)
+    - `XJ7K2P` (hard to type, no meaning)
+  </Accordion>
+  
+  <Accordion title="Discount Strategy">
+    **Balance acquisition cost with LTV**:
+    
+    - Start with small discounts (10-20%)
+    - Test different durations (1 month vs 3 months)
+    - Track conversion rates and churn
+    - Avoid discounting too deeply (>50%)
+    - Use one-time discounts for trials
+    - Reserve forever discounts for VIP customers
+  </Accordion>
+  
+  <Accordion title="Expiration Management">
+    **Create urgency without being pushy**:
+    
+    - Set reasonable expiration dates (30-90 days)
+    - Extend expiring popular coupons
+    - Notify customers before expiration
+    - Archive expired coupons for historical tracking
+  </Accordion>
+  
+  <Accordion title="Fraud Prevention">
+    **Protect against coupon abuse**:
+    
+    - Set max redemptions for high-value coupons
+    - Enable one-per-customer limits
+    - Monitor unusual redemption patterns
+    - Use unique codes for referral programs
+    - Disable suspicious coupons immediately
+  </Accordion>
+</AccordionGroup>
+
+## Invoice Display
+
+Coupons appear clearly on invoices:
+
+```
+Pro Plan - Monthly             $299.00
+Coupon: LAUNCH20 (20% off)     -$59.80
+                              --------
+Subtotal                       $239.20
+Tax (10%)                       $23.92
+                              --------
+Total                          $263.12
+
+Discount active for 2 more billing cycles
+```
+
+<CardGroup cols={2}>
+  <Card title="Create Plans" icon="tag" href="/guides/creating-plans">
+    Learn how to configure pricing plans
+  </Card>
+  <Card title="Coupons API" icon="code" href="/api/grpc/coupons">
+    Explore the coupons API reference
+  </Card>
+</CardGroup>

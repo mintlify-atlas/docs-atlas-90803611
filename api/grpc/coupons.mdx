@@ -1,0 +1,433 @@
+---
+title: 'Coupons Service'
+description: 'Create and manage discount coupons for subscriptions'
+---
+
+## Overview
+
+The Coupons service provides discount management functionality:
+
+- Create percentage or fixed-amount coupons
+- Set expiration dates and redemption limits
+- Configure recurring or one-time discounts
+- Track coupon usage and redemptions
+- Archive, enable, or disable coupons
+
+## Service Definition
+
+```protobuf
+service CouponsService {
+  rpc GetCoupon(GetCouponRequest) returns (GetCouponResponse) {}
+  rpc ListCoupons(ListCouponRequest) returns (ListCouponResponse) {}
+  rpc ListAppliedCoupons(ListAppliedCouponRequest) returns (ListAppliedCouponResponse) {}
+  rpc CreateCoupon(CreateCouponRequest) returns (CreateCouponResponse) {}
+  rpc RemoveCoupon(RemoveCouponRequest) returns (RemoveCouponResponse) {}
+  rpc EditCoupon(EditCouponRequest) returns (EditCouponResponse) {}
+  rpc UpdateCouponStatus(UpdateCouponStatusRequest) returns (UpdateCouponStatusResponse) {}
+}
+```
+
+## RPC Methods
+
+### CreateCoupon
+
+Creates a new coupon.
+
+<ParamField path="code" type="string" required>
+  Unique coupon code (e.g., "SUMMER2024")
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Coupon description
+</ParamField>
+
+<ParamField path="discount" type="CouponDiscount" required>
+  Discount configuration:
+  - `percentage`: Percentage discount (e.g., "25" for 25%)
+  - `fixed`: Fixed amount discount with currency
+</ParamField>
+
+<ParamField path="expires_at" type="string">
+  Expiration date (ISO 8601)
+</ParamField>
+
+<ParamField path="redemption_limit" type="int32">
+  Maximum number of total redemptions (unlimited if not set)
+</ParamField>
+
+<ParamField path="recurring_value" type="int32">
+  Number of billing cycles to apply discount (one-time if not set)
+</ParamField>
+
+<ParamField path="reusable" type="bool" required>
+  Whether coupon can be reused by same customer
+</ParamField>
+
+<ParamField path="plan_ids" type="string[]" required>
+  List of plan IDs this coupon applies to (empty = all plans)
+</ParamField>
+
+**Response:** Returns created `Coupon` object.
+
+### ListCoupons
+
+Retrieves a paginated list of coupons.
+
+<ParamField path="search" type="string">
+  Search query (matches code or description)
+</ParamField>
+
+<ParamField path="filter" type="CouponFilter">
+  Status filter: `ALL`, `ACTIVE`, `INACTIVE`, `ARCHIVED`
+</ParamField>
+
+<ParamField path="pagination" type="Pagination">
+  Pagination parameters
+</ParamField>
+
+**Response:** Returns paginated list of `Coupon` objects.
+
+### GetCoupon
+
+Retrieves detailed coupon information.
+
+<ParamField path="coupon_local_id" type="string" required>
+  Coupon local identifier
+</ParamField>
+
+**Response:** Returns `Coupon` object with complete details.
+
+### EditCoupon
+
+Updates an existing coupon.
+
+<ParamField path="coupon_id" type="string" required>
+  Coupon ID to update
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Updated description
+</ParamField>
+
+<ParamField path="discount" type="CouponDiscount" required>
+  Updated discount configuration
+</ParamField>
+
+<ParamField path="plan_ids" type="string[]" required>
+  Updated plan restrictions
+</ParamField>
+
+<Note>
+Cannot update: code, expires_at, redemption_limit, recurring_value, or reusable after creation.
+</Note>
+
+**Response:** Returns updated `Coupon` object.
+
+### UpdateCouponStatus
+
+Changes coupon status.
+
+<ParamField path="coupon_id" type="string" required>
+  Coupon ID
+</ParamField>
+
+<ParamField path="action" type="CouponAction" required>
+  Action to perform:
+  - `ARCHIVE`: Archive the coupon
+  - `DISABLE`: Disable the coupon
+  - `ENABLE`: Enable the coupon
+</ParamField>
+
+**Response:** Returns updated `Coupon` object.
+
+### RemoveCoupon
+
+Permanently deletes a coupon.
+
+<ParamField path="coupon_id" type="string" required>
+  Coupon ID to remove
+</ParamField>
+
+<Warning>
+This permanently deletes the coupon. Consider archiving instead.
+</Warning>
+
+### ListAppliedCoupons
+
+Lists all subscriptions where a coupon has been applied.
+
+<ParamField path="coupon_local_id" type="string" required>
+  Coupon local identifier
+</ParamField>
+
+<ParamField path="pagination" type="Pagination">
+  Pagination parameters
+</ParamField>
+
+**Response:** Returns list of `AppliedCouponForDisplay` objects showing where coupon is used.
+
+## Data Models
+
+### Coupon
+
+Complete coupon definition.
+
+<ParamField path="id" type="string">
+  Coupon ID
+</ParamField>
+
+<ParamField path="code" type="string">
+  Unique coupon code
+</ParamField>
+
+<ParamField path="description" type="string">
+  Description
+</ParamField>
+
+<ParamField path="discount" type="CouponDiscount">
+  Discount configuration
+</ParamField>
+
+<ParamField path="expires_at" type="string">
+  Expiration date
+</ParamField>
+
+<ParamField path="redemption_limit" type="int32">
+  Maximum redemptions
+</ParamField>
+
+<ParamField path="local_id" type="string">
+  Local identifier
+</ParamField>
+
+<ParamField path="created_at" type="string">
+  Creation timestamp
+</ParamField>
+
+<ParamField path="disabled" type="bool">
+  Whether coupon is disabled
+</ParamField>
+
+<ParamField path="redemption_count" type="uint32">
+  Number of times redeemed
+</ParamField>
+
+<ParamField path="last_redemption_at" type="string">
+  Last redemption timestamp
+</ParamField>
+
+<ParamField path="archived_at" type="string">
+  Archive timestamp
+</ParamField>
+
+<ParamField path="recurring_value" type="int32">
+  Number of cycles discount applies
+</ParamField>
+
+<ParamField path="reusable" type="bool">
+  Whether reusable by same customer
+</ParamField>
+
+<ParamField path="plan_ids" type="string[]">
+  Applicable plan IDs
+</ParamField>
+
+### CouponDiscount
+
+Discount configuration (oneof).
+
+<ParamField path="discount_type" type="oneof">
+  Discount type:
+  
+  **percentage**: Percentage discount
+  - `percentage`: Discount percentage as string (e.g., "25.5")
+  
+  **fixed**: Fixed amount discount
+  - `amount`: Discount amount as string
+  - `currency`: Currency code
+</ParamField>
+
+### AppliedCoupon
+
+Coupon application to a subscription.
+
+<ParamField path="id" type="string">
+  Applied coupon ID
+</ParamField>
+
+<ParamField path="coupon_id" type="string">
+  Source coupon ID
+</ParamField>
+
+<ParamField path="customer_id" type="string">
+  Customer ID
+</ParamField>
+
+<ParamField path="subscription_id" type="string">
+  Subscription ID
+</ParamField>
+
+<ParamField path="is_active" type="bool">
+  Whether currently active
+</ParamField>
+
+<ParamField path="last_applied_at" type="timestamp">
+  Last application timestamp
+</ParamField>
+
+<ParamField path="created_at" type="timestamp">
+  Creation timestamp
+</ParamField>
+
+<ParamField path="applied_amount" type="string">
+  Total amount discounted
+</ParamField>
+
+<ParamField path="applied_count" type="int32">
+  Number of times applied
+</ParamField>
+
+### AppliedCouponForDisplay
+
+Enriched applied coupon data for display.
+
+<ParamField path="id" type="string">
+  Applied coupon ID
+</ParamField>
+
+<ParamField path="coupon_id" type="string">
+  Coupon ID
+</ParamField>
+
+<ParamField path="customer_name" type="string">
+  Customer name
+</ParamField>
+
+<ParamField path="customer_local_id" type="string">
+  Customer local ID
+</ParamField>
+
+<ParamField path="subscription_id" type="string">
+  Subscription ID
+</ParamField>
+
+<ParamField path="plan_name" type="string">
+  Plan name
+</ParamField>
+
+<ParamField path="plan_local_id" type="string">
+  Plan local ID
+</ParamField>
+
+<ParamField path="plan_version" type="int32">
+  Plan version number
+</ParamField>
+
+<ParamField path="is_active" type="bool">
+  Active status
+</ParamField>
+
+<ParamField path="applied_amount" type="string">
+  Total discounted amount
+</ParamField>
+
+<ParamField path="applied_count" type="int32">
+  Application count
+</ParamField>
+
+### AppliedCouponDetailed
+
+Complete applied coupon with full coupon details.
+
+<ParamField path="coupon" type="Coupon">
+  Full coupon object
+</ParamField>
+
+<ParamField path="applied_coupon" type="AppliedCoupon">
+  Application details
+</ParamField>
+
+## Usage Examples
+
+### Create a Percentage Coupon
+
+```protobuf
+CreateCouponRequest {
+  code: "SUMMER25"
+  description: "25% off summer promotion"
+  discount {
+    percentage {
+      percentage: "25"
+    }
+  }
+  expires_at: "2024-09-01T00:00:00Z"
+  redemption_limit: 100
+  recurring_value: 3  // Apply for 3 billing cycles
+  reusable: false
+  plan_ids: []  // Applies to all plans
+}
+```
+
+### Create a Fixed Amount Coupon
+
+```protobuf
+CreateCouponRequest {
+  code: "WELCOME50"
+  description: "$50 off first month"
+  discount {
+    fixed {
+      amount: "50.00"
+      currency: "USD"
+    }
+  }
+  recurring_value: 1  // One-time discount
+  reusable: false
+  plan_ids: ["plan_pro", "plan_enterprise"]
+}
+```
+
+### Create a Reusable Partner Coupon
+
+```protobuf
+CreateCouponRequest {
+  code: "PARTNER2024"
+  description: "Partner discount - 15% ongoing"
+  discount {
+    percentage {
+      percentage: "15"
+    }
+  }
+  // No expiration, no limit, applies forever
+  reusable: true
+  plan_ids: []
+}
+```
+
+## Coupon Behavior
+
+### Redemption Limits
+- If `redemption_limit` is set, the coupon can only be redeemed that many times total across all customers
+- Once limit is reached, the coupon becomes invalid
+
+### Recurring vs One-Time
+- `recurring_value = 1` (or not set): Discount applies to one invoice only
+- `recurring_value = N`: Discount applies to N consecutive billing cycles
+- No `recurring_value`: Discount applies indefinitely (for permanent discounts)
+
+### Reusable Coupons
+- `reusable = true`: Same customer can use coupon on multiple subscriptions
+- `reusable = false`: Customer can only use coupon once
+
+### Plan Restrictions
+- Empty `plan_ids`: Coupon applies to all plans
+- Specific `plan_ids`: Coupon only applies to listed plans
+
+### Status Management
+- **Active**: Coupon can be redeemed
+- **Disabled**: Coupon cannot be redeemed (but existing applications continue)
+- **Archived**: Coupon is hidden from lists (but existing applications continue)
+
+## Proto Location
+
+- Service definition: `proto/api/coupons/v1/coupons.proto`
+- Models: `proto/api/coupons/v1/models.proto`

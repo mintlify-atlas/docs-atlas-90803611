@@ -1,0 +1,155 @@
+---
+title: 'Metering API Overview'
+description: 'Real-time usage metering and aggregation service for Meteroid'
+---
+
+## Overview
+
+The Meteroid Metering API is a high-performance service designed to ingest, store, and query usage events for billing and analytics purposes. It provides real-time event ingestion with flexible aggregation capabilities.
+
+## Architecture
+
+The metering service consists of three main components:
+
+### Event Ingestion
+
+Captures usage events from your application via gRPC API. Events are validated, enriched with metadata, and persisted to a time-series database.
+
+**Key features:**
+- High-throughput event ingestion
+- Kafka-based event streaming for scalability
+- Automatic tenant isolation
+- Backfilling support for historical data
+- Idempotent event processing
+
+### Storage Layer
+
+Utilizes ClickHouse as the underlying time-series database for efficient storage and querying of high-volume usage data.
+
+**Capabilities:**
+- Nanosecond timestamp precision
+- Schema-flexible property storage (key-value maps)
+- Optimized for analytical queries
+- Automatic data retention policies
+
+### Query Service
+
+Provides flexible APIs to query aggregated usage data with support for:
+- Multiple aggregation types (SUM, COUNT, AVG, MIN, MAX, etc.)
+- Time-windowing (minute, hour, day, or custom periods)
+- Multi-dimensional grouping
+- Segmentation filters
+- Raw event access for debugging
+
+## Core Concepts
+
+### Events
+
+An event represents a single usage data point with:
+- **ID**: Unique identifier (idempotency key)
+- **Code**: Billable metric code (e.g., `api_calls`, `compute_hours`)
+- **Customer ID**: Meteroid customer ID or external alias
+- **Timestamp**: RFC3339 formatted timestamp
+- **Properties**: Arbitrary key-value pairs for dimensions and values
+
+### Meters
+
+Meters define how events should be aggregated:
+- **Aggregation Type**: SUM, COUNT, AVG, MIN, MAX, LATEST, COUNT_DISTINCT
+- **Aggregation Key**: Property to aggregate (required for non-COUNT types)
+- **Dimensions**: Properties to group by (e.g., region, instance_type)
+- **Code**: Links the meter to event codes
+
+### Aggregation Types
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `COUNT` | Count number of events | API requests, transactions |
+| `SUM` | Sum a numeric property | Total bytes transferred, compute seconds |
+| `AVG` | Average of a property | Average response time |
+| `MIN` | Minimum value | Lowest concurrent users |
+| `MAX` | Maximum value | Peak bandwidth usage |
+| `LATEST` | Most recent value | Current storage size |
+| `COUNT_DISTINCT` | Unique values count | Unique active users |
+
+## Authentication
+
+All API requests require authentication using tenant-specific credentials passed via gRPC metadata:
+
+```typescript
+const metadata = new grpc.Metadata();
+metadata.add('authorization', 'Bearer YOUR_API_KEY');
+```
+
+The tenant context is automatically extracted from the authentication token.
+
+## Service Endpoints
+
+The Metering API exposes three gRPC services:
+
+### EventsService
+
+```protobuf
+service EventsService {
+  rpc Ingest(IngestRequest) returns (IngestResponse);
+}
+```
+
+Ingest usage events for processing. See [Event Ingestion](/api/metering/ingest-events) for details.
+
+### UsageQueryService
+
+```protobuf
+service UsageQueryService {
+  rpc QueryMeter(QueryMeterRequest) returns (QueryMeterResponse);
+  rpc QueryRawEvents(QueryRawEventsRequest) returns (QueryRawEventsResponse);
+}
+```
+
+Query aggregated usage data and raw events. See [Usage Query](/api/metering/query-usage) for details.
+
+### MetersService
+
+```protobuf
+service MetersService {
+  rpc RegisterMeter(RegisterMeterRequest) returns (RegisterMeterResponse);
+  rpc UnregisterMeter(UnregisterMeterRequest) returns (UnregisterMeterResponse);
+}
+```
+
+Manage meter definitions for your tenant.
+
+## Performance Characteristics
+
+- **Ingestion throughput**: 10,000+ events/second per instance
+- **Query latency**: Sub-second for most aggregations
+- **Data retention**: Configurable, default 13 months
+- **Timestamp precision**: Nanoseconds
+- **Max event size**: 64KB (properties)
+
+## Best Practices
+
+1. **Use meaningful event IDs** - Enables idempotent retries and deduplication
+2. **Include rich properties** - Add dimensions early; schema changes are expensive
+3. **Batch events** - Send multiple events per request for better throughput
+4. **Set proper timestamps** - Use event occurrence time, not ingestion time
+5. **Monitor failures** - Check `IngestResponse.failures` for rejected events
+6. **Cache meter definitions** - Meter registration is infrequent; cache locally
+
+## Error Handling
+
+The API returns partial success for batch ingestion:
+- Successful events are persisted
+- Failed events are returned in `IngestResponse.failures`
+- Each failure includes the event ID and failure reason
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Ingest Events" icon="upload" href="/api/metering/ingest-events">
+    Send usage events to the metering service
+  </Card>
+  <Card title="Query Usage" icon="chart-line" href="/api/metering/query-usage">
+    Retrieve aggregated usage data
+  </Card>
+</CardGroup>

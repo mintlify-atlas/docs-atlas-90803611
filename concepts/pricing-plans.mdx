@@ -1,0 +1,350 @@
+---
+title: Pricing Plans
+description: Understanding Meteroid's flexible pricing plan architecture
+icon: tags
+---
+
+## Overview
+
+A **Pricing Plan** in Meteroid defines how you charge customers for your products and services. Plans are composed of multiple **Price Components** that reference **Billable Metrics** for usage-based pricing, alongside subscription fees and one-time charges.
+
+Meteroid supports complex pricing models including:
+- Subscription-based (recurring fees)
+- Usage-based (metered consumption)
+- Hybrid models (subscription + usage)
+- Tiered, volume, and matrix pricing
+- Capacity and slot-based pricing
+
+## Plan Structure
+
+Based on the data model at `modules/meteroid/proto/api/plans/v1/models.proto:84-96`:
+
+```protobuf
+message Plan {
+  string id = 1;
+  string name = 2;
+  string local_id = 3;                    // Human-readable ID
+  optional string description = 4;
+  PlanType plan_type = 5;
+  PlanStatus plan_status = 6;
+  optional string active_version_id = 11;
+  optional string draft_version_id = 12;
+  optional int32 self_service_rank = 13;  // Display order for self-service
+}
+```
+
+## Plan Types
+
+Defined at `modules/meteroid/proto/api/plans/v1/models.proto:12-17`:
+
+```protobuf
+enum PlanType {
+  STANDARD = 0;  // Regular paid plan
+  FREE = 1;      // Free tier
+  CUSTOM = 2;    // Negotiated/enterprise plan
+}
+```
+
+## Plan Status
+
+Plans progress through different statuses at `modules/meteroid/proto/api/plans/v1/models.proto:5-10`:
+
+```protobuf
+enum PlanStatus {
+  DRAFT = 0;     // Being configured, not available for subscription
+  ACTIVE = 1;    // Available for new subscriptions
+  INACTIVE = 2;  // No longer available, but existing subscriptions continue
+  ARCHIVED = 3;  // Permanently disabled
+}
+```
+
+## Plan Versions
+
+Plans use versioning to manage pricing changes without affecting existing subscriptions. Each plan can have:
+
+- **Active version**: Used for new subscriptions
+- **Draft version**: Being prepared for future release
+
+Defined at `modules/meteroid/proto/api/plans/v1/models.proto:59-69`:
+
+```protobuf
+message PlanVersion {
+  string id = 1;
+  bool is_draft = 2;
+  uint32 version = 3;              // Incremental version number
+  TrialConfig trial_config = 4;
+  PlanBillingConfiguration billing_config = 5;
+  string currency = 6;
+  optional int32 period_start_day = 8;
+  int32 net_terms = 9;             // Payment terms (days)
+  bool uses_product_pricing = 10;
+}
+```
+
+### Trial Configuration
+
+Plans can include free or discounted trials at `modules/meteroid/proto/api/plans/v1/models.proto:51-57`:
+
+```protobuf
+message TrialConfig {
+  uint32 duration_days = 1;              // Length of trial period
+  bool trial_is_free = 2;                // Whether trial is free or charged
+  optional string trialing_plan_id = 3;  // Different plan features during trial
+}
+```
+
+### Billing Configuration
+
+At `modules/meteroid/proto/api/plans/v1/models.proto:26-49`:
+
+```protobuf
+message PlanBillingConfiguration {
+  uint32 net_terms = 2;  // Payment due in X days
+
+  // When billing period starts:
+  oneof service_period_start {
+    DayOfMonth day_of_month = 3;              // Fixed day (e.g., 1st of month)
+    SubscriptionAnniversary subscription_anniversary = 4;  // Subscription start date
+  }
+
+  // How many billing cycles:
+  oneof billing_cycles {
+    Fixed fixed = 6;    // Limited number of cycles
+    Forever forever = 7; // Recurring indefinitely
+  }
+}
+```
+
+## Price Components
+
+**Price Components** are the building blocks of a plan. Each component represents a charge or fee.
+
+Defined at `modules/meteroid/proto/api/pricecomponents/v1/models.proto:20-26`:
+
+```protobuf
+message PriceComponent {
+  string id = 1;
+  string name = 2;
+  optional string product_id = 4;
+  string local_id = 5;
+  repeated meteroid.api.prices.v1.Price prices = 6;  // Multiple prices for different cadences/currencies
+}
+```
+
+### Component Types
+
+Price components can implement various pricing models:
+
+1. **Rate (Subscription Fee)** - Fixed recurring fee
+2. **Usage-Based** - Charges based on metered consumption  
+3. **Slot-Based** - Per-unit pricing (seats, licenses)
+4. **Capacity** - Included amount + overage charges
+5. **One-Time** - Setup fees, migrations, etc.
+
+## Usage-Based Pricing
+
+Usage pricing links to billable metrics for metering at `modules/meteroid/proto/api/pricecomponents/v1/models.proto:8-18`:
+
+```protobuf
+message UsageFee {
+  string metric_id = 1;  // References a billable metric
+  oneof model {
+    string per_unit = 2;              // Simple per-unit price
+    TieredAndVolumePricing tiered = 3; // Graduated tiers
+    TieredAndVolumePricing volume = 4; // Volume discount
+    PackagePricing package = 5;        // Bundled units
+    MatrixPricing matrix = 6;          // Multi-dimensional pricing
+  }
+  meteroid.api.shared.v1.BillingPeriod term = 7;
+}
+```
+
+### Pricing Models Explained
+
+#### Per-Unit Pricing
+
+Simplest model: `price × usage`
+
+```
+$0.10 per API call
+1,000 calls → $100
+```
+
+#### Tiered Pricing (Graduated)
+
+Different rates for different usage ranges, charged per tier:
+
+```
+0-1,000 calls:     $0.10/call
+1,001-10,000:      $0.08/call  
+10,001+:           $0.05/call
+
+15,000 calls:
+  First 1,000:     $100
+  Next 9,000:      $720
+  Last 5,000:      $250
+  Total:           $1,070
+```
+
+#### Volume Pricing
+
+Single rate applied to all usage based on total volume:
+
+```
+0-1,000 calls:     $0.10/call
+1,001-10,000:      $0.08/call
+10,001+:           $0.05/call
+
+15,000 calls → $0.05 × 15,000 = $750
+```
+
+#### Package Pricing
+
+Charge per bundle of units:
+
+```
+$50 per 1,000 calls
+2,300 calls → 3 packages → $150
+```
+
+#### Matrix Pricing
+
+Multi-dimensional pricing based on multiple attributes:
+
+```
+           | Region: US | Region: EU |
+-----------|------------|------------|
+Instance S | $0.10/hour | $0.12/hour |
+Instance M | $0.20/hour | $0.24/hour |
+Instance L | $0.40/hour | $0.48/hour |
+```
+
+## Billable Metrics
+
+**Billable Metrics** define what to measure and how to aggregate usage data.
+
+Defined at `modules/meteroid/proto/api/billablemetrics/v1/models.proto:93-107`:
+
+```protobuf
+message BillableMetric {
+  string id = 1;
+  string name = 2;
+  string code = 3;                         // Used in usage events
+  optional string description = 4;
+  Aggregation aggregation = 5;
+  SegmentationMatrix segmentation_matrix = 6;  // Multi-dimensional grouping
+  optional string usage_group_key = 7;
+  optional string product_id = 10;
+  string local_id = 11;
+}
+```
+
+### Aggregation Types
+
+At `modules/meteroid/proto/api/billablemetrics/v1/models.proto:7-17`:
+
+```protobuf
+message Aggregation {
+  enum AggregationType {
+    SUM = 0;           // Add all values
+    MIN = 1;           // Minimum value
+    MAX = 2;           // Maximum value  
+    MEAN = 3;          // Average value
+    LATEST = 4;        // Most recent value
+    COUNT = 5;         // Count events
+    COUNT_DISTINCT = 6; // Unique values
+  }
+  AggregationType aggregation_type = 1;
+  optional string aggregation_key = 2;  // Field to aggregate
+}
+```
+
+### Segmentation
+
+Metrics can be segmented by dimensions (e.g., region, product tier, instance type) for matrix pricing:
+
+```protobuf
+message SegmentationMatrix {
+  oneof matrix {
+    SegmentationMatrixSingle single = 1;   // One dimension
+    SegmentationMatrixDouble double = 2;   // Two dimensions
+    SegmentationMatrixLinked linked = 3;   // Linked dimensions
+  }
+}
+```
+
+## Complete Plan Example
+
+Here's how components come together in a hybrid SaaS plan:
+
+### Starter Plan
+
+**Base Subscription**: $49/month
+- Includes 10,000 API calls
+- Includes 5 users
+
+**Usage Overages**:
+- API calls: $0.005 per call over 10,000
+- Additional users: $9/user/month
+
+**One-time**:
+- Setup fee: $99 (one-time)
+
+This would be structured as:
+
+1. **Rate Component**: $49/month recurring fee
+2. **Capacity Component**: API calls (10,000 included, $0.005 overage)
+3. **Slot Component**: Users (5 included, $9 per additional)
+4. **One-Time Component**: $99 setup fee
+
+## Plan Parameters
+
+Plans can accept parameters that customize pricing at subscription time at `modules/meteroid/proto/api/plans/v1/models.proto:127-142`:
+
+```protobuf
+message PlanParameter {
+  oneof param {
+    BillingPeriodTerm billing_period_term = 1;      // Monthly/Annual choice
+    CapacityThresholdValue capacity_threshold_value = 2; // Custom included amount
+    CommittedSlot committed_slot = 3;                // Committed seats
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use plan versions for pricing changes">
+    Never modify an active plan version. Create a new draft version, test it, then publish. Existing subscriptions remain on their version.
+  </Accordion>
+  
+  <Accordion title="Set self_service_rank for ordering">
+    Control how plans appear in your pricing page by setting `self_service_rank`. Lower numbers appear first.
+  </Accordion>
+  
+  <Accordion title="Start with DRAFT status">
+    Create plans in DRAFT mode to test configuration before making them available for subscriptions.
+  </Accordion>
+  
+  <Accordion title="Use meaningful local_ids">
+    Set clear, memorable `local_id` values like `starter`, `pro`, `enterprise` for easier reference in code and APIs.
+  </Accordion>
+  
+  <Accordion title="Configure trials carefully">
+    Consider whether trials should be free (`trial_is_free: true`) or charged. Free trials work best for lower-tier plans.
+  </Accordion>
+</AccordionGroup>
+
+## Related Concepts
+
+<CardGroup cols={2}>
+  <Card title="Subscriptions" icon="calendar-check" href="/concepts/subscriptions">
+    Learn how customers subscribe to plans
+  </Card>
+  <Card title="Metering" icon="gauge" href="/concepts/metering">
+    Understand how usage is measured for billable metrics
+  </Card>
+  <Card title="Invoicing" icon="file-invoice-dollar" href="/concepts/invoicing">
+    See how plans are converted into invoices
+  </Card>
+</CardGroup>

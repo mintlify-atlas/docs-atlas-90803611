@@ -1,0 +1,163 @@
+---
+title: "Subscription Management"
+description: "Manage the complete subscription lifecycle from creation to cancellation"
+---
+
+Meteroid provides comprehensive subscription management capabilities, handling everything from initial signup through upgrades, downgrades, and cancellations with automated proration and invoicing.
+
+## Subscription Lifecycle
+
+<Steps>
+  <Step title="Draft">
+    Subscription created but not yet active. Configure pricing, components, and activation conditions.
+  </Step>
+  <Step title="Pending">
+    Subscription scheduled to start on a future date or waiting for payment method confirmation.
+  </Step>
+  <Step title="Active">
+    Subscription is live and billing. Usage is tracked and charges accrue.
+  </Step>
+  <Step title="Canceled">
+    Subscription terminated. No further billing occurs.
+  </Step>
+</Steps>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Flexible Activation" icon="play">
+    Activate immediately, on a specific date, or when customer confirms payment
+  </Card>
+  <Card title="Plan Changes" icon="arrow-right-arrow-left">
+    Upgrade or downgrade plans with automatic proration
+  </Card>
+  <Card title="Slot-based Billing" icon="users">
+    Per-seat pricing with mid-cycle adjustments
+  </Card>
+  <Card title="Trial Periods" icon="clock">
+    Configurable trial periods with automatic conversion
+  </Card>
+</CardGroup>
+
+## Subscription Configuration
+
+### Billing Cycles
+- **Monthly**: Bill every month on the anniversary date
+- **Quarterly**: Bill every 3 months
+- **Annual**: Bill once per year
+- **Custom**: Define any billing frequency
+
+### Activation Conditions
+Control when subscriptions become active:
+- **Immediate**: Activate as soon as created
+- **Date-based**: Start on a specific date
+- **Payment confirmation**: Wait for payment method setup
+
+### Component Customization
+Customize subscription components per customer:
+- **Parameterization**: Override metric aggregations or filters
+- **Fee overrides**: Adjust pricing for specific customers
+- **Add-ons**: Attach optional features or services
+
+## Common Operations
+
+### Creating Subscriptions
+Create subscriptions via the web UI, API, or checkout sessions:
+
+<CodeGroup>
+```typescript API
+const subscription = await api.subscriptions.create({
+  customer_id: "cust_abc123",
+  plan_id: "plan_pro_monthly",
+  billing_start: "2024-02-01",
+  activated: true
+});
+```
+
+```typescript Checkout
+// Let customers self-serve through checkout
+const checkout = await api.checkout.create({
+  customer_id: "cust_abc123",
+  plan_id: "plan_pro_monthly"
+});
+```
+</CodeGroup>
+
+### Upgrading Plans
+Schedule plan changes with automatic proration:
+
+<Info>
+When upgrading mid-cycle, Meteroid automatically:
+1. Calculates unused time on the old plan
+2. Issues credit for the prorated amount
+3. Charges for the new plan from the change date
+</Info>
+
+### Managing Slots
+For per-seat pricing, adjust slots during the billing period:
+
+- **Add seats**: Prorated charges for remaining period
+- **Remove seats**: Prorated credits on next invoice
+- **Bulk changes**: Update multiple seats at once
+
+### Cancellation Options
+
+<Tabs>
+  <Tab title="End of Period">
+    Subscription remains active until the end of the current billing period, then cancels automatically.
+    
+    **Use case**: Customer wants to finish their paid period
+  </Tab>
+  <Tab title="Immediate">
+    Subscription cancels immediately. Prorated credits may be issued.
+    
+    **Use case**: Immediate termination with refund
+  </Tab>
+  <Tab title="Scheduled">
+    Cancel on a specific future date.
+    
+    **Use case**: Known end date for contract
+  </Tab>
+</Tabs>
+
+## Subscription Analytics
+
+Track subscription health and metrics:
+- **MRR (Monthly Recurring Revenue)**: Current subscription value
+- **Churn rate**: Cancellation tracking
+- **Expansion revenue**: Upgrades and add-ons
+- **Retention cohorts**: Lifecycle analysis
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Trial to Paid Conversion">
+    - Set clear trial periods with automatic conversion
+    - Require payment method before trial starts
+    - Send notifications before trial ends
+    - Make conversion seamless without re-enrollment
+  </Accordion>
+  
+  <Accordion title="Handling Upgrades">
+    - Allow customers to upgrade anytime
+    - Preview prorated charges before confirming
+    - Explain the credit/charge calculation
+    - Update limits immediately after upgrade
+  </Accordion>
+  
+  <Accordion title="Graceful Cancellation">
+    - Offer to pause instead of cancel
+    - Collect cancellation feedback
+    - Provide data export options
+    - Allow reactivation within grace period
+  </Accordion>
+</AccordionGroup>
+
+<CardGroup cols={2}>
+  <Card title="Manage Subscriptions" icon="gear" href="/guides/managing-subscriptions">
+    Step-by-step subscription management guide
+  </Card>
+  <Card title="Subscription Concepts" icon="book" href="/concepts/subscriptions">
+    Learn about subscription data model
+  </Card>
+</CardGroup>

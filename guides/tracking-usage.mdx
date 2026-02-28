@@ -1,0 +1,476 @@
+---
+title: "Tracking Customer Usage"
+description: "Learn how to track and meter customer usage for consumption-based billing"
+---
+
+Usage-based pricing requires accurately tracking customer activity. Meteroid's metering system collects, aggregates, and bills usage events in real-time.
+
+## Overview
+
+The metering workflow:
+1. **Define billable metrics** - What you measure (API calls, storage, compute)
+2. **Ingest events** - Send usage data from your application
+3. **Aggregate usage** - Meteroid automatically aggregates by subscription period
+4. **Bill customers** - Usage appears on invoices with your pricing rules applied
+
+<Steps>
+
+<Step title="Create a billable metric">
+
+Billable metrics define what you measure and how to aggregate it. Create them using the BillableMetricsService.
+
+```protobuf
+message CreateBillableMetricRequest {
+  string name = 1;
+  string code = 2;
+  optional string description = 3;
+  Aggregation aggregation = 4;
+  SegmentationMatrix segmentation_matrix = 5;
+  optional string usage_group_key = 6;
+  string family_local_id = 7;
+}
+```
+
+**Aggregation types:**
+- `SUM` - Total all values (data transfer, API calls)
+- `COUNT` - Count events (transactions, requests)
+- `COUNT_DISTINCT` - Unique values (active users)
+- `MAX` - Highest value in period (peak usage)
+- `LATEST` - Most recent value (current state)
+- `MEAN` - Average value
+
+**Example: API calls metric**
+
+```json
+{
+  "name": "API Calls",
+  "code": "api_calls",
+  "description": "Total API requests per billing period",
+  "aggregation": {
+    "aggregation_type": "COUNT",
+    "aggregation_key": null
+  },
+  "segmentation_matrix": {
+    "dimensions": []
+  },
+  "family_local_id": "saas-platform"
+}
+```
+
+**Example: Data transfer with aggregation key**
+
+```json
+{
+  "name": "Data Transfer",
+  "code": "data_transfer",
+  "description": "Total bytes transferred",
+  "aggregation": {
+    "aggregation_type": "SUM",
+    "aggregation_key": "bytes"
+  },
+  "segmentation_matrix": {
+    "dimensions": ["region"]
+  },
+  "family_local_id": "cloud-infrastructure"
+}
+```
+
+**Segmentation dimensions** allow you to track usage across multiple axes (e.g., by region, instance type, or environment).
+
+</Step>
+
+<Step title="Ingest usage events">
+
+Send usage events from your application using the EventsService metering API.
+
+```protobuf
+message IngestRequest {
+  repeated Event events = 1;
+  bool allow_backfilling = 2;
+}
+
+message Event {
+  string id = 1;
+  string code = 2;
+  oneof customer_id {
+    string meteroid_customer_id = 3;
+    string external_customer_alias = 4;
+  }
+  string timestamp = 5;
+  map<string, string> properties = 6;
+}
+```
+
+### Single event ingestion
+
+```json
+{
+  "events": [
+    {
+      "id": "evt_1234567890",
+      "code": "api_calls",
+      "external_customer_alias": "customer-abc",
+      "timestamp": "2024-02-28T15:30:00Z",
+      "properties": {
+        "endpoint": "/api/v1/users",
+        "method": "GET",
+        "status": "200"
+      }
+    }
+  ]
+}
+```
+
+### Batch event ingestion
+
+For high-throughput applications, send events in batches:
+
+```json
+{
+  "events": [
+    {
+      "id": "evt_001",
+      "code": "data_transfer",
+      "meteroid_customer_id": "cust_01HX...",
+      "timestamp": "2024-02-28T15:30:00Z",
+      "properties": {
+        "bytes": "1048576",
+        "region": "us-east-1",
+        "direction": "egress"
+      }
+    },
+    {
+      "id": "evt_002",
+      "code": "data_transfer",
+      "meteroid_customer_id": "cust_01HX...",
+      "timestamp": "2024-02-28T15:31:00Z",
+      "properties": {
+        "bytes": "2097152",
+        "region": "us-east-1",
+        "direction": "egress"
+      }
+    }
+  ],
+  "allow_backfilling": false
+}
+```
+
+<Note>
+**Event ID requirements:**
+- Must be unique per event
+- Used for idempotency (duplicate IDs are ignored)
+- Recommended format: `{source}_{timestamp}_{random}`
+</Note>
+
+### Customer identification
+
+You can identify customers using either:
+- `meteroid_customer_id` - Internal Meteroid customer ID
+- `external_customer_alias` - Your system's customer identifier
+
+**Timestamp format:** RFC3339 string (e.g., `2024-02-28T15:30:00Z`)
+
+</Step>
+
+<Step title="Add unit conversions (optional)">
+
+Unit conversions allow you to collect usage in one unit but bill in another.
+
+**Example: Collect bytes, bill in GB**
+
+```json
+{
+  "id": "metric_data_transfer",
+  "unit_conversion": {
+    "source_unit": "bytes",
+    "target_unit": "GB",
+    "factor": "0.000000000931322574615478515625"
+  }
+}
+```
+
+This is useful for:
+- Storage: bytes → GB/TB
+- Time: milliseconds → hours
+- Network: packets → GB
+
+</Step>
+
+<Step title="Configure usage pricing">
+
+Attach your billable metric to a plan's price component with a pricing model.
+
+### Per-unit pricing
+
+Simple rate per unit consumed:
+
+```json
+{
+  "plan_version_id": "ver_01HX...",
+  "name": "API calls",
+  "product": {
+    "new_product": {
+      "name": "API usage",
+      "fee_type": "USAGE",
+      "fee_structure": {
+        "usage": {
+          "metric_id": "metric_api_calls"
+        }
+      }
+    }
+  },
+  "prices": [
+    {
+      "new_price": {
+        "cadence": "MONTHLY",
+        "currency": "USD",
+        "usage_pricing": {
+          "per_unit": {
+            "per_unit_price": "10"
+          },
+          "metric_id": "metric_api_calls"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Tiered pricing
+
+Pay different rates at different volume levels:
+
+```json
+{
+  "usage_pricing": {
+    "tiered": {
+      "tiers": [
+        {
+          "first_unit": "0",
+          "per_unit_price": "10"
+        },
+        {
+          "first_unit": "10000",
+          "per_unit_price": "8"
+        },
+        {
+          "first_unit": "50000",
+          "per_unit_price": "5"
+        }
+      ]
+    },
+    "metric_id": "metric_api_calls"
+  }
+}
+```
+
+### Volume pricing
+
+Entire usage billed at one rate based on total volume:
+
+```json
+{
+  "usage_pricing": {
+    "volume": {
+      "tiers": [
+        {
+          "first_unit": "0",
+          "per_unit_price": "10"
+        },
+        {
+          "first_unit": "10000",
+          "per_unit_price": "7"
+        }
+      ]
+    },
+    "metric_id": "metric_compute_hours"
+  }
+}
+```
+
+### Package pricing
+
+Units sold in fixed packages:
+
+```json
+{
+  "usage_pricing": {
+    "package": {
+      "package_size": "1000",
+      "package_price": "5000"
+    },
+    "metric_id": "metric_sms_messages"
+  }
+}
+```
+
+</Step>
+
+<Step title="Query usage data">
+
+Retrieve aggregated usage for a subscription using GetSubscriptionComponentUsage.
+
+```protobuf
+message GetSubscriptionComponentUsageRequest {
+  string subscription_id = 1;
+  string metric_id = 2;
+}
+
+message GetSubscriptionComponentUsageResponse {
+  repeated UsageDataPoint data_points = 1;
+  string period_start = 2;
+  string period_end = 3;
+}
+```
+
+**Example Request:**
+
+```json
+{
+  "subscription_id": "sub_01HX...",
+  "metric_id": "metric_api_calls"
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "data_points": [
+    {
+      "window_start": "2024-02-01T00:00:00Z",
+      "window_end": "2024-02-02T00:00:00Z",
+      "value": "12450",
+      "dimensions": {}
+    },
+    {
+      "window_start": "2024-02-02T00:00:00Z",
+      "window_end": "2024-02-03T00:00:00Z",
+      "value": "15230",
+      "dimensions": {}
+    }
+  ],
+  "period_start": "2024-02-01T00:00:00Z",
+  "period_end": "2024-03-01T00:00:00Z"
+}
+```
+
+Use this to:
+- Display usage dashboards to customers
+- Send usage alerts
+- Analyze consumption patterns
+
+</Step>
+
+</Steps>
+
+## Implementation patterns
+
+### Real-time ingestion
+
+For immediate billing accuracy, send events synchronously:
+
+```typescript
+// After processing API request
+await meteroid.events.ingest({
+  events: [{
+    id: `api_${Date.now()}_${uuid()}`,
+    code: 'api_calls',
+    external_customer_alias: req.customerId,
+    timestamp: new Date().toISOString(),
+    properties: {
+      endpoint: req.path,
+      method: req.method
+    }
+  }]
+});
+```
+
+### Batched ingestion
+
+For high-volume scenarios, batch events:
+
+```typescript
+const eventQueue = [];
+
+// Collect events
+eventQueue.push({
+  id: generateEventId(),
+  code: 'api_calls',
+  external_customer_alias: customerId,
+  timestamp: new Date().toISOString(),
+  properties: {}
+});
+
+// Flush every 100 events or 10 seconds
+if (eventQueue.length >= 100 || timeSinceLastFlush > 10000) {
+  await meteroid.events.ingest({
+    events: eventQueue
+  });
+  eventQueue.length = 0;
+}
+```
+
+### Backfilling historical data
+
+Import past usage with the `allow_backfilling` flag:
+
+```json
+{
+  "events": [
+    {
+      "id": "historical_001",
+      "code": "api_calls",
+      "external_customer_alias": "customer-abc",
+      "timestamp": "2024-01-15T10:00:00Z",
+      "properties": {}
+    }
+  ],
+  "allow_backfilling": true
+}
+```
+
+<Warning>
+Backfilled events may affect already-finalized invoices. Use carefully and consider voiding/regenerating invoices if needed.
+</Warning>
+
+## Best practices
+
+<AccordionGroup>
+
+<Accordion title="Use unique, deterministic event IDs">
+Generate IDs that are unique but reproducible (e.g., hash of event data) to enable safe retries without duplicates.
+</Accordion>
+
+<Accordion title="Include rich properties">
+Event properties help with debugging and future segmentation. Include metadata like region, environment, or user agent.
+</Accordion>
+
+<Accordion title="Handle ingestion failures gracefully">
+Implement retry logic with exponential backoff. Queue failed events for later reprocessing.
+</Accordion>
+
+<Accordion title="Monitor ingestion lag">
+Track the delay between event occurrence and ingestion. Alert if lag exceeds acceptable thresholds.
+</Accordion>
+
+<Accordion title="Validate before ingesting">
+Check that metric codes exist and customer IDs are valid before sending events to avoid ingestion failures.
+</Accordion>
+
+<Accordion title="Use appropriate aggregation types">
+Choose aggregation that matches business semantics: SUM for additive metrics, MAX for peak usage, COUNT_DISTINCT for unique entities.
+</Accordion>
+
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Creating Plans" icon="layer-group" href="/guides/creating-plans">
+    Add usage-based components to your pricing plans
+  </Card>
+  <Card title="Generating Invoices" icon="file-invoice" href="/guides/generating-invoices">
+    See how usage appears on customer invoices
+  </Card>
+</CardGroup>

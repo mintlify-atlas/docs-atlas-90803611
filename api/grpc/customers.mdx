@@ -1,0 +1,458 @@
+---
+title: 'Customers Service'
+description: 'Manage customer records, balances, payments, and integrations'
+---
+
+## Overview
+
+The Customers service provides comprehensive customer management functionality including:
+
+- Customer CRUD operations
+- Balance and credit management
+- Payment method handling
+- External system integrations (HubSpot, Pennylane)
+- Customer portal access
+- CSV bulk import
+
+## Service Definition
+
+### CustomersService
+
+Main service for customer management operations.
+
+```protobuf
+service CustomersService {
+  rpc CreateCustomer(CreateCustomerRequest) returns (CreateCustomerResponse) {}
+  rpc UpdateCustomer(UpdateCustomerRequest) returns (UpdateCustomerResponse) {}
+  rpc ListCustomers(ListCustomerRequest) returns (ListCustomerResponse) {}
+  rpc GetCustomerById(GetCustomerByIdRequest) returns (GetCustomerByIdResponse) {}
+  rpc GetCustomerByAlias(GetCustomerByAliasRequest) returns (GetCustomerByAliasResponse) {}
+  rpc TopUpCustomerBalance(TopUpCustomerBalanceRequest) returns (TopUpCustomerBalanceResponse) {}
+  rpc BuyCustomerCredits(BuyCustomerCreditsRequest) returns (BuyCustomerCreditsResponse) {}
+  rpc ArchiveCustomer(ArchiveCustomerRequest) returns (ArchiveCustomerResponse) {}
+  rpc UnarchiveCustomer(UnarchiveCustomerRequest) returns (UnarchiveCustomerResponse) {}
+  rpc SyncToHubspot(SyncToHubspotRequest) returns (SyncToHubspotResponse) {}
+  rpc SyncToPennylane(SyncToPennylaneRequest) returns (SyncToPennylaneResponse) {}
+  rpc GenerateCustomerPortalToken(GenerateCustomerPortalTokenRequest) returns (GenerateCustomerPortalTokenResponse) {}
+  rpc UpsertCustomerConnection(UpsertCustomerConnectionRequest) returns (UpsertCustomerConnectionResponse) {}
+  rpc DeleteCustomerConnection(DeleteCustomerConnectionRequest) returns (DeleteCustomerConnectionResponse) {}
+}
+```
+
+### CustomersIngestService
+
+Service for bulk customer import operations.
+
+```protobuf
+service CustomersIngestService {
+  rpc IngestCsv(IngestCsvRequest) returns (IngestCsvResponse) {}
+}
+```
+
+## RPC Methods
+
+### CreateCustomer
+
+Creates a new customer record.
+
+<ParamField path="data" type="CustomerNew" required>
+  Customer data to create
+  
+  <Expandable title="CustomerNew fields">
+    <ParamField path="name" type="string" required>
+      Customer name
+    </ParamField>
+    <ParamField path="billing_email" type="string">
+      Primary billing email address
+    </ParamField>
+    <ParamField path="alias" type="string">
+      External customer alias/reference
+    </ParamField>
+    <ParamField path="invoicing_emails" type="string[]">
+      Additional email addresses for invoices
+    </ParamField>
+    <ParamField path="phone" type="string">
+      Customer phone number
+    </ParamField>
+    <ParamField path="currency" type="string" required>
+      ISO currency code (e.g., USD, EUR)
+    </ParamField>
+    <ParamField path="billing_address" type="Address">
+      Billing address details
+    </ParamField>
+    <ParamField path="shipping_address" type="ShippingAddress">
+      Shipping address details
+    </ParamField>
+    <ParamField path="invoicing_entity_id" type="string">
+      Associated invoicing entity ID
+    </ParamField>
+    <ParamField path="vat_number" type="string">
+      VAT/tax identification number
+    </ParamField>
+    <ParamField path="custom_taxes" type="CustomTaxRate[]">
+      Custom tax rates for this customer
+    </ParamField>
+    <ParamField path="is_tax_exempt" type="bool">
+      Whether customer is tax exempt
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Response:** Returns `CustomerBrief` with the created customer summary.
+
+### UpdateCustomer
+
+Updates an existing customer record.
+
+<ParamField path="customer" type="UpdateCustomer" required>
+  Customer update data
+  
+  <Expandable title="UpdateCustomer fields">
+    <ParamField path="id" type="string" required>
+      Customer ID to update
+    </ParamField>
+    <ParamField path="name" type="string">
+      Updated customer name
+    </ParamField>
+    <ParamField path="billing_email" type="string">
+      Updated billing email
+    </ParamField>
+    <ParamField path="alias" type="string">
+      Updated alias
+    </ParamField>
+    <ParamField path="invoicing_emails" type="InvoicingEmails">
+      Updated invoicing email list
+    </ParamField>
+    <ParamField path="phone" type="string">
+      Updated phone number
+    </ParamField>
+    <ParamField path="currency" type="string">
+      Updated currency
+    </ParamField>
+    <ParamField path="billing_address" type="Address">
+      Updated billing address
+    </ParamField>
+    <ParamField path="vat_number" type="string">
+      Updated VAT number
+    </ParamField>
+    <ParamField path="custom_taxes" type="CustomTaxesList">
+      Updated custom tax rates
+    </ParamField>
+    <ParamField path="is_tax_exempt" type="bool">
+      Updated tax exempt status
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### ListCustomers
+
+Retrieves a paginated list of customers.
+
+<ParamField path="search" type="string">
+  Search query to filter customers
+</ParamField>
+
+<ParamField path="sort_by" type="SortBy">
+  Sort order: `DATE_DESC`, `DATE_ASC`, `NAME_DESC`, `NAME_ASC`
+</ParamField>
+
+<ParamField path="pagination" type="Pagination">
+  Pagination parameters (limit, offset)
+</ParamField>
+
+<ParamField path="archived" type="bool">
+  Filter by archived status
+</ParamField>
+
+**Response:** Returns `CustomerBrief[]` list with pagination metadata.
+
+### GetCustomerById
+
+Retrieves a customer by ID.
+
+<ParamField path="id" type="string" required>
+  Customer ID
+</ParamField>
+
+**Response:** Returns full `Customer` object with all details.
+
+### GetCustomerByAlias
+
+Retrieves a customer by their alias.
+
+<ParamField path="alias" type="string" required>
+  Customer alias
+</ParamField>
+
+**Response:** Returns full `Customer` object.
+
+### TopUpCustomerBalance
+
+Adds credits to a customer's balance.
+
+<ParamField path="customer_id" type="string" required>
+  Customer ID
+</ParamField>
+
+<ParamField path="cents" type="int64" required>
+  Amount to add in cents
+</ParamField>
+
+<ParamField path="notes" type="string">
+  Optional notes for the top-up transaction
+</ParamField>
+
+**Response:** Returns updated `Customer` object.
+
+### BuyCustomerCredits
+
+Purchases credits for a customer, generating an invoice.
+
+<ParamField path="customer_id" type="string" required>
+  Customer ID
+</ParamField>
+
+<ParamField path="cents" type="int64" required>
+  Amount to purchase in cents
+</ParamField>
+
+<ParamField path="notes" type="string">
+  Optional notes for the purchase
+</ParamField>
+
+**Response:** Returns `DetailedInvoice` for the credit purchase.
+
+### ArchiveCustomer
+
+Archives a customer record.
+
+<ParamField path="id" type="string" required>
+  Customer ID to archive
+</ParamField>
+
+### UnarchiveCustomer
+
+Unarchives a previously archived customer.
+
+<ParamField path="id" type="string" required>
+  Customer ID to unarchive
+</ParamField>
+
+### SyncToHubspot
+
+Synchronizes customers to HubSpot CRM.
+
+<ParamField path="customer_ids" type="string[]" required>
+  List of customer IDs to sync
+</ParamField>
+
+### SyncToPennylane
+
+Synchronizes customers to Pennylane accounting system.
+
+<ParamField path="customer_ids" type="string[]" required>
+  List of customer IDs to sync
+</ParamField>
+
+### GenerateCustomerPortalToken
+
+Generates a secure token for customer portal access.
+
+<ParamField path="customer_id" type="string" required>
+  Customer ID
+</ParamField>
+
+**Response:** Returns a `token` string for portal authentication.
+
+### UpsertCustomerConnection
+
+Creates or updates an external system connection for a customer.
+
+<ParamField path="customer_id" type="string" required>
+  Customer ID
+</ParamField>
+
+<ParamField path="connector_id" type="string" required>
+  Connector ID
+</ParamField>
+
+<ParamField path="external_customer_id" type="string" required>
+  External system customer identifier
+</ParamField>
+
+**Response:** Returns the `CustomerConnection` object.
+
+### DeleteCustomerConnection
+
+Removes an external system connection.
+
+<ParamField path="customer_id" type="string" required>
+  Customer ID
+</ParamField>
+
+<ParamField path="connection_id" type="string" required>
+  Connection ID to delete
+</ParamField>
+
+### IngestCsv
+
+Bulk imports customers from CSV file.
+
+<ParamField path="file" type="FileData" required>
+  CSV file data
+</ParamField>
+
+<ParamField path="delimiter" type="string" required>
+  CSV delimiter character
+</ParamField>
+
+<ParamField path="fail_on_error" type="bool" required>
+  Whether to abort on first error
+</ParamField>
+
+**Response:** Returns ingestion statistics including total rows, successful rows, and failure details.
+
+## Data Models
+
+### Customer
+
+Complete customer record with all details.
+
+<ParamField path="id" type="string">
+  Unique customer identifier
+</ParamField>
+
+<ParamField path="name" type="string">
+  Customer name
+</ParamField>
+
+<ParamField path="billing_email" type="string">
+  Primary billing email
+</ParamField>
+
+<ParamField path="alias" type="string">
+  External reference alias
+</ParamField>
+
+<ParamField path="balance_value_cents" type="int64">
+  Current balance in cents
+</ParamField>
+
+<ParamField path="currency" type="string">
+  Customer's currency code
+</ParamField>
+
+<ParamField path="local_id" type="string">
+  Human-readable local identifier
+</ParamField>
+
+<ParamField path="vat_number" type="string">
+  VAT/tax identification number
+</ParamField>
+
+<ParamField path="is_tax_exempt" type="bool">
+  Tax exemption status
+</ParamField>
+
+<ParamField path="is_vat_number_valid" type="bool">
+  VAT number validation status
+</ParamField>
+
+<ParamField path="customer_connections" type="CustomerConnection[]">
+  External system connections
+</ParamField>
+
+<ParamField path="payment_methods" type="CustomerPaymentMethod[]">
+  Associated payment methods
+</ParamField>
+
+### CustomerBrief
+
+Summary customer information for list views.
+
+<ParamField path="id" type="string">
+  Customer ID
+</ParamField>
+
+<ParamField path="name" type="string">
+  Customer name
+</ParamField>
+
+<ParamField path="billing_email" type="string">
+  Billing email
+</ParamField>
+
+<ParamField path="alias" type="string">
+  Customer alias
+</ParamField>
+
+<ParamField path="country" type="string">
+  Country code
+</ParamField>
+
+<ParamField path="created_at" type="string">
+  Creation timestamp
+</ParamField>
+
+<ParamField path="local_id" type="string">
+  Local identifier
+</ParamField>
+
+### Address
+
+<ParamField path="line1" type="string">
+  Address line 1
+</ParamField>
+
+<ParamField path="line2" type="string">
+  Address line 2
+</ParamField>
+
+<ParamField path="city" type="string">
+  City
+</ParamField>
+
+<ParamField path="country" type="string">
+  Country code
+</ParamField>
+
+<ParamField path="state" type="string">
+  State/province
+</ParamField>
+
+<ParamField path="zipCode" type="string">
+  Postal/ZIP code
+</ParamField>
+
+### CustomerPaymentMethod
+
+Payment method associated with a customer.
+
+<ParamField path="id" type="string">
+  Payment method ID
+</ParamField>
+
+<ParamField path="payment_method_type" type="PaymentMethodTypeEnum">
+  Type: `CARD`, `TRANSFER`, `DIRECT_DEBIT_SEPA`, `DIRECT_DEBIT_ACH`, `DIRECT_DEBIT_BACS`, `OTHER`
+</ParamField>
+
+<ParamField path="card_brand" type="string">
+  Card brand (for card payments)
+</ParamField>
+
+<ParamField path="card_last4" type="string">
+  Last 4 digits of card number
+</ParamField>
+
+<ParamField path="card_exp_month" type="int32">
+  Card expiration month
+</ParamField>
+
+<ParamField path="card_exp_year" type="int32">
+  Card expiration year
+</ParamField>
+
+## Proto Location
+
+- Service definition: `proto/api/customers/v1/customers.proto`
+- Models: `proto/api/customers/v1/models.proto`

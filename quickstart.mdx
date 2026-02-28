@@ -1,80 +1,328 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get started with Meteroid in under 10 minutes
 ---
 
-## Get started in three steps
+# Quickstart Guide
 
-Get your documentation site running locally and make your first customization.
+This guide will walk you through setting up Meteroid, creating your first customer, defining a pricing plan, and tracking usage events.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+Before you begin, ensure you have:
+
+- Docker and Docker Compose installed
+- Basic knowledge of REST APIs or gRPC
+- A terminal and text editor
+
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/meteroid-oss/meteroid.git
+    cd meteroid
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Copy the example environment file and update the secrets:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    cp .env.example .env
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    Edit `.env` and set secure values for:
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    # Platform Secrets (IMPORTANT: Change these!)
+    JWT_SECRET=your-secure-jwt-secret-here
+    INTERNAL_API_SECRET=your-internal-api-secret
+    SECRETS_CRYPT_KEY=32-character-encryption-key-here
+    
+    # Database
+    DATABASE_PASSWORD=your-secure-db-password
+    
+    # Clickhouse
+    CLICKHOUSE_PASSWORD=your-clickhouse-password
+    ```
+    
+    <Note>
+      The `SECRETS_CRYPT_KEY` must be exactly 32 characters long and should be a secure random string.
+    </Note>
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Start Meteroid with Docker Compose">
+    Start all services including the database, ClickHouse, Kafka, and the Meteroid API:
+    
+    ```bash
+    docker compose -f docker/deploy/docker-compose.yml --env-file .env up -d
+    ```
+    
+    This will start:
+    - **meteroid-db** (PostgreSQL) - Stores billing data on port 5432
+    - **clickhouse** - Stores metering events on ports 8123 (HTTP) and 9000 (TCP)
+    - **redpanda** (Kafka-compatible) - Event streaming on port 9092
+    - **meteroid-api** - Main billing API on ports 50061 (gRPC) and 8084 (REST)
+    - **metering-api** - Usage tracking API on port 50062
+    - **meteroid-web** - Web UI on port 3000
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Access the Web UI">
+    Open your browser and navigate to:
+    
+    ```
+    http://localhost:3000
+    ```
+    
+    You'll be greeted with the Meteroid web interface where you can create your organization and set up your first tenant.
+  </Step>
+</Steps>
 
-### Step 3: Go live
+## Your First Billing Workflow
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+Let's create a complete billing workflow: customer → plan → subscription → usage → invoice.
 
-## Next steps
+<Steps>
+  <Step title="Create a Customer">
+    First, create a customer who will be billed for usage:
+    
+    ```bash
+    curl -X POST http://localhost:8084/api/v1/customers \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer YOUR_API_TOKEN" \
+      -d '{
+        "name": "Acme Corporation",
+        "alias": "acme-corp",
+        "email": "billing@acme.com",
+        "billing_config": {
+          "billing_address": {
+            "line1": "123 Main St",
+            "city": "San Francisco",
+            "country": "US"
+          }
+        }
+      }'
+    ```
+    
+    The `alias` field is important - it's used to reference the customer when ingesting usage events.
+    
+    <Note>
+      Save the customer `id` from the response - you'll need it for creating subscriptions.
+    </Note>
+  </Step>
 
-Now that you have your docs running, explore these key features:
+  <Step title="Create a Billable Metric">
+    Define what you want to track and bill for. For example, API calls:
+    
+    ```bash
+    curl -X POST http://localhost:8084/api/v1/billable-metrics \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer YOUR_API_TOKEN" \
+      -d '{
+        "name": "API Requests",
+        "code": "api_requests",
+        "aggregation_type": "COUNT",
+        "unit_name": "requests"
+      }'
+    ```
+    
+    Supported aggregation types:
+    - `COUNT` - Count events
+    - `SUM` - Sum a numeric property
+    - `MAX` / `MIN` / `MEAN` - Statistical aggregations
+    - `COUNT_DISTINCT` - Unique values
+    - `LATEST` - Most recent value
+  </Step>
+
+  <Step title="Create a Pricing Plan">
+    Create a plan with usage-based pricing. This example uses tiered pricing for API requests:
+    
+    Via the Web UI:
+    1. Navigate to **Plans** in the sidebar
+    2. Click **Create Plan**
+    3. Set the plan name (e.g., "Pro Plan")
+    4. Choose currency (e.g., "USD")
+    5. Add price components:
+       - Base subscription: $29/month
+       - Usage component: API Requests
+         - First 10,000 requests: Included
+         - Next 90,000 requests: $0.001 per request
+         - Above 100,000 requests: $0.0005 per request
+    
+    Or via API (simplified example):
+    
+    ```bash
+    curl -X POST http://localhost:8084/api/v1/plans \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer YOUR_API_TOKEN" \
+      -d '{
+        "name": "Pro Plan",
+        "description": "For growing teams",
+        "plan_type": "STANDARD",
+        "currency": "USD"
+      }'
+    ```
+  </Step>
+
+  <Step title="Create a Subscription">
+    Subscribe your customer to the plan:
+    
+    ```bash
+    curl -X POST http://localhost:8084/api/v1/subscriptions \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer YOUR_API_TOKEN" \
+      -d '{
+        "customer_id": "<CUSTOMER_ID>",
+        "plan_version_id": "<PLAN_VERSION_ID>",
+        "billing_start": "2026-03-01T00:00:00Z"
+      }'
+    ```
+    
+    The subscription will be in `PENDING` status initially. Activate it:
+    
+    ```bash
+    curl -X POST http://localhost:8084/api/v1/subscriptions/<SUBSCRIPTION_ID>/activate \
+      -H "Authorization: Bearer YOUR_API_TOKEN"
+    ```
+  </Step>
+
+  <Step title="Track Usage Events">
+    Now send usage events to the metering API. These events will be aggregated and billed:
+    
+    ```bash
+    curl -X POST http://localhost:50062/events/ingest \
+      -H "Content-Type: application/json" \
+      -H "X-API-Key: YOUR_METERING_API_KEY" \
+      -d '{
+        "events": [
+          {
+            "id": "evt_unique_id_1",
+            "code": "api_requests",
+            "external_customer_alias": "acme-corp",
+            "timestamp": "2026-03-01T10:30:00Z",
+            "properties": {
+              "endpoint": "/api/users",
+              "method": "GET"
+            }
+          }
+        ]
+      }'
+    ```
+    
+    Key fields:
+    - `id` - Unique event identifier (prevents duplicates)
+    - `code` - The billable metric code
+    - `external_customer_alias` - Customer alias (or use `meteroid_customer_id`)
+    - `timestamp` - RFC3339 timestamp
+    - `properties` - Optional metadata (can be used for filtering/dimensions)
+    
+    <Tip>
+      Events are deduplicated by `id`, so you can safely retry failed requests.
+    </Tip>
+  </Step>
+
+  <Step title="View Usage & Generate Invoice">
+    Check the customer's usage:
+    
+    ```bash
+    curl http://localhost:8084/api/v1/subscriptions/<SUBSCRIPTION_ID>/usage?metric_id=<METRIC_ID> \
+      -H "Authorization: Bearer YOUR_API_TOKEN"
+    ```
+    
+    At the end of the billing period, Meteroid will automatically:
+    1. Aggregate usage data from ClickHouse
+    2. Apply pricing tiers and calculations
+    3. Generate an invoice with line items
+    4. Apply credits, coupons, and taxes if configured
+    
+    You can also preview the upcoming invoice:
+    
+    ```bash
+    curl http://localhost:8084/api/v1/subscriptions/<SUBSCRIPTION_ID>/upcoming-invoice \
+      -H "Authorization: Bearer YOUR_API_TOKEN"
+    ```
+  </Step>
+</Steps>
+
+## Example: Bulk Event Ingestion
+
+For high-throughput scenarios, you can send events in batches:
+
+```bash
+curl -X POST http://localhost:50062/events/ingest \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_METERING_API_KEY" \
+  -d '{
+    "events": [
+      {
+        "id": "evt_1",
+        "code": "api_requests",
+        "external_customer_alias": "acme-corp",
+        "timestamp": "2026-03-01T10:00:00Z",
+        "properties": {"value": "1"}
+      },
+      {
+        "id": "evt_2",
+        "code": "api_requests",
+        "external_customer_alias": "acme-corp",
+        "timestamp": "2026-03-01T10:01:00Z",
+        "properties": {"value": "1"}
+      }
+    ],
+    "allow_backfilling": false
+  }'
+```
+
+The API will return any failures:
+
+```json
+{
+  "failures": [
+    {
+      "event_id": "evt_1",
+      "reason": "Duplicate event ID"
+    }
+  ]
+}
+```
+
+## CSV Import
+
+Meteroid supports CSV import for bulk customer and subscription creation. Sample files are included:
+
+```bash
+# Import customers
+cat sample_customers.csv
+# name,alias,email
+# Acme Corp,acme-corp,billing@acme.com
+
+# Import subscriptions  
+cat sample_subscriptions.csv
+# customer_alias,plan_code,billing_start
+# acme-corp,pro-plan,2026-03-01T00:00:00Z
+```
+
+## Next Steps
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    Learn how Meteroid's components work together
+  </Card>
+  
+  <Card title="Pricing Models" icon="calculator" href="/pricing-models">
+    Explore supported pricing strategies
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Browse the complete API documentation
+  </Card>
+  
+  <Card title="Production Deployment" icon="rocket" href="/deployment">
+    Deploy Meteroid to production with Kubernetes
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Need Help?
+
+Join our [Discord community](https://go.meteroid.com/discord) for support and discussions, or check out the [GitHub repository](https://github.com/meteroid-oss/meteroid) for issues and contributions.

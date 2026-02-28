@@ -1,0 +1,418 @@
+---
+title: 'Billable Metrics Service'
+description: 'Configure and manage usage-based billing metrics'
+---
+
+## Overview
+
+The Billable Metrics service enables configuration of usage-based billing through:
+
+- Metric creation with various aggregation types
+- Multi-dimensional segmentation matrices
+- Unit conversion and rounding rules
+- Metric archiving and updates
+
+## Service Definition
+
+```protobuf
+service BillableMetricsService {
+  rpc CreateBillableMetric (CreateBillableMetricRequest) returns (CreateBillableMetricResponse) {}
+  rpc ListBillableMetrics (ListBillableMetricsRequest) returns (ListBillableMetricsResponse) {}
+  rpc GetBillableMetric (GetBillableMetricRequest) returns (GetBillableMetricResponse) {}
+  rpc UpdateBillableMetric (UpdateBillableMetricRequest) returns (UpdateBillableMetricResponse) {}
+  rpc ArchiveBillableMetric (ArchiveBillableMetricRequest) returns (ArchiveBillableMetricResponse) {}
+  rpc UnarchiveBillableMetric (UnarchiveBillableMetricRequest) returns (UnarchiveBillableMetricResponse) {}
+}
+```
+
+## RPC Methods
+
+### CreateBillableMetric
+
+Creates a new billable metric.
+
+<ParamField path="name" type="string" required>
+  Metric display name
+</ParamField>
+
+<ParamField path="code" type="string" required>
+  Unique metric code/identifier used in events
+</ParamField>
+
+<ParamField path="description" type="string">
+  Metric description
+</ParamField>
+
+<ParamField path="aggregation" type="Aggregation" required>
+  Aggregation configuration
+  
+  <Expandable title="Aggregation fields">
+    <ParamField path="aggregation_type" type="AggregationType" required>
+      Type: `SUM`, `MIN`, `MAX`, `MEAN`, `LATEST`, `COUNT`, `COUNT_DISTINCT`
+    </ParamField>
+    <ParamField path="aggregation_key" type="string">
+      Event property to aggregate (required for SUM, MIN, MAX, MEAN, LATEST, COUNT_DISTINCT)
+    </ParamField>
+    <ParamField path="unit_conversion" type="UnitConversion">
+      Optional unit conversion and rounding
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="segmentation_matrix" type="SegmentationMatrix" required>
+  Dimensional segmentation configuration
+</ParamField>
+
+<ParamField path="usage_group_key" type="string">
+  Property key for grouping usage events
+</ParamField>
+
+<ParamField path="family_local_id" type="string" required>
+  Product family identifier
+</ParamField>
+
+<ParamField path="product_id" type="string">
+  Associated product ID
+</ParamField>
+
+**Response:** Returns created `BillableMetric`.
+
+### ListBillableMetrics
+
+Retrieves a paginated list of billable metrics.
+
+<ParamField path="family_local_id" type="string">
+  Filter by product family
+</ParamField>
+
+<ParamField path="pagination" type="Pagination">
+  Pagination parameters
+</ParamField>
+
+<ParamField path="archived" type="bool">
+  Filter by archived status
+</ParamField>
+
+**Response:** Returns list of `BillableMetricMeta` objects with pagination.
+
+### GetBillableMetric
+
+Retrieves detailed metric information.
+
+<ParamField path="id" type="string" required>
+  Metric ID
+</ParamField>
+
+**Response:** Returns complete `BillableMetric` object.
+
+### UpdateBillableMetric
+
+Updates a billable metric (limited fields).
+
+<ParamField path="id" type="string" required>
+  Metric ID to update
+</ParamField>
+
+<ParamField path="name" type="string">
+  Updated name
+</ParamField>
+
+<ParamField path="description" type="string">
+  Updated description
+</ParamField>
+
+<ParamField path="unit_conversion" type="UnitConversion">
+  Updated unit conversion rules
+</ParamField>
+
+<ParamField path="segmentation_matrix_values" type="SegmentationMatrixValuesUpdate">
+  Updated dimension values (cannot change dimension keys)
+</ParamField>
+
+**Response:** Returns updated `BillableMetric`.
+
+### ArchiveBillableMetric
+
+Archives a metric, preventing it from being used in new plans.
+
+<ParamField path="id" type="string" required>
+  Metric ID to archive
+</ParamField>
+
+### UnarchiveBillableMetric
+
+Unarchives a previously archived metric.
+
+<ParamField path="id" type="string" required>
+  Metric ID to unarchive
+</ParamField>
+
+## Data Models
+
+### BillableMetric
+
+Complete billable metric definition.
+
+<ParamField path="id" type="string">
+  Metric ID
+</ParamField>
+
+<ParamField path="name" type="string">
+  Display name
+</ParamField>
+
+<ParamField path="code" type="string">
+  Unique code for event tracking
+</ParamField>
+
+<ParamField path="description" type="string">
+  Description
+</ParamField>
+
+<ParamField path="aggregation" type="Aggregation">
+  Aggregation configuration
+</ParamField>
+
+<ParamField path="segmentation_matrix" type="SegmentationMatrix">
+  Segmentation configuration
+</ParamField>
+
+<ParamField path="usage_group_key" type="string">
+  Usage grouping key
+</ParamField>
+
+<ParamField path="created_at" type="timestamp">
+  Creation timestamp
+</ParamField>
+
+<ParamField path="archived_at" type="timestamp">
+  Archive timestamp
+</ParamField>
+
+<ParamField path="product_id" type="string">
+  Associated product ID
+</ParamField>
+
+<ParamField path="local_id" type="string">
+  Local identifier
+</ParamField>
+
+<ParamField path="synced_at" type="timestamp">
+  Last sync timestamp
+</ParamField>
+
+<ParamField path="sync_error" type="string">
+  Last sync error (if any)
+</ParamField>
+
+### BillableMetricMeta
+
+Metric summary for list views.
+
+<ParamField path="id" type="string">
+  Metric ID
+</ParamField>
+
+<ParamField path="name" type="string">
+  Display name
+</ParamField>
+
+<ParamField path="code" type="string">
+  Metric code
+</ParamField>
+
+<ParamField path="aggregation_type" type="AggregationType">
+  Aggregation type
+</ParamField>
+
+<ParamField path="aggregation_key" type="string">
+  Aggregation key
+</ParamField>
+
+<ParamField path="created_at" type="timestamp">
+  Creation timestamp
+</ParamField>
+
+<ParamField path="archived_at" type="timestamp">
+  Archive timestamp
+</ParamField>
+
+### Aggregation
+
+Defines how usage events are aggregated.
+
+<ParamField path="aggregation_type" type="AggregationType">
+  Aggregation method
+</ParamField>
+
+<ParamField path="aggregation_key" type="string">
+  Event property to aggregate
+</ParamField>
+
+<ParamField path="unit_conversion" type="UnitConversion">
+  Unit conversion settings
+</ParamField>
+
+### AggregationType
+
+Enum values:
+- `SUM`: Sum of values
+- `MIN`: Minimum value
+- `MAX`: Maximum value
+- `MEAN`: Average value
+- `LATEST`: Most recent value
+- `COUNT`: Count of events
+- `COUNT_DISTINCT`: Count of unique values
+
+### UnitConversion
+
+Unit conversion and rounding rules.
+
+<ParamField path="factor" type="double">
+  Multiplication factor (e.g., 0.001 to convert bytes to KB)
+</ParamField>
+
+<ParamField path="rounding" type="UnitConversionRounding">
+  Rounding method: `NONE`, `UP`, `DOWN`, `NEAREST`
+</ParamField>
+
+### SegmentationMatrix
+
+Defines multi-dimensional segmentation for metrics.
+
+<ParamField path="matrix" type="oneof">
+  Matrix type:
+  
+  - **single**: Single dimension segmentation
+    - `dimension`: Dimension with key and allowed values
+  
+  - **double**: Two independent dimensions
+    - `dimension1`: First dimension
+    - `dimension2`: Second dimension
+  
+  - **linked**: Two linked dimensions (values depend on each other)
+    - `dimension_key`: Primary dimension key
+    - `linked_dimension_key`: Secondary dimension key
+    - `values`: Map of primary values to allowed secondary values
+</ParamField>
+
+#### Example: Single Dimension
+
+```protobuf
+SegmentationMatrix {
+  single {
+    dimension {
+      key: "region"
+      values: ["us-east", "us-west", "eu-west"]
+    }
+  }
+}
+```
+
+#### Example: Double Dimension
+
+```protobuf
+SegmentationMatrix {
+  double {
+    dimension1 {
+      key: "region"
+      values: ["us", "eu"]
+    }
+    dimension2 {
+      key: "tier"
+      values: ["standard", "premium"]
+    }
+  }
+}
+```
+
+#### Example: Linked Dimension
+
+```protobuf
+SegmentationMatrix {
+  linked {
+    dimension_key: "cloud_provider"
+    linked_dimension_key: "region"
+    values {
+      "aws": ["us-east-1", "us-west-2"]
+      "gcp": ["us-central1", "europe-west1"]
+    }
+  }
+}
+```
+
+### SegmentationMatrixValuesUpdate
+
+Update dimension values without changing structure.
+
+<ParamField path="values" type="oneof">
+  Value updates:
+  
+  - **single**: Update single dimension values
+    - `values`: New array of allowed values
+  
+  - **double**: Update double dimension values
+    - `dimension1_values`: New values for dimension 1
+    - `dimension2_values`: New values for dimension 2
+  
+  - **linked**: Update linked dimension values
+    - `values`: New map of linked values
+</ParamField>
+
+## Usage Examples
+
+### API Request Count Metric
+
+```protobuf
+CreateBillableMetricRequest {
+  name: "API Requests"
+  code: "api_requests"
+  aggregation {
+    aggregation_type: COUNT
+  }
+  segmentation_matrix {
+    single {
+      dimension {
+        key: "endpoint"
+        values: ["/users", "/orders", "/products"]
+      }
+    }
+  }
+  family_local_id: "api-platform"
+}
+```
+
+### Compute Hours Metric
+
+```protobuf
+CreateBillableMetricRequest {
+  name: "Compute Hours"
+  code: "compute_hours"
+  aggregation {
+    aggregation_type: SUM
+    aggregation_key: "duration_seconds"
+    unit_conversion {
+      factor: 0.000277778  // convert seconds to hours
+      rounding: UP
+    }
+  }
+  segmentation_matrix {
+    double {
+      dimension1 {
+        key: "instance_type"
+        values: ["small", "medium", "large"]
+      }
+      dimension2 {
+        key: "region"
+        values: ["us", "eu", "asia"]
+      }
+    }
+  }
+  family_local_id: "compute"
+}
+```
+
+## Proto Location
+
+- Service definition: `proto/api/billablemetrics/v1/billablemetrics.proto`
+- Models: `proto/api/billablemetrics/v1/models.proto`

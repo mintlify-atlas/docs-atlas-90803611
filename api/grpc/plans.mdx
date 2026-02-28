@@ -1,0 +1,462 @@
+---
+title: 'Plans Service'
+description: 'Define and manage pricing plans with versioning support'
+---
+
+## Overview
+
+The Plans service provides comprehensive plan management including:
+
+- Plan creation and versioning
+- Draft and published version management
+- Plan parameters and configuration
+- Trial period configuration
+- Plan archiving and activation
+
+## Service Definition
+
+```protobuf
+service PlansService {
+  rpc GetPlanOverview(GetPlanOverviewRequest) returns (GetPlanOverviewResponse) {}
+  rpc GetPlanWithVersion(GetPlanWithVersionRequest) returns (GetPlanWithVersionResponse) {}
+  rpc GetPlanWithVersionByVersionId(GetPlanWithVersionByVersionIdRequest) returns (GetPlanWithVersionByVersionIdResponse) {}
+  rpc ListPlans(ListPlansRequest) returns (ListPlansResponse) {}
+  rpc CreateDraftPlan(CreateDraftPlanRequest) returns (CreateDraftPlanResponse) {}
+  rpc UpdateDraftPlanOverview(UpdateDraftPlanOverviewRequest) returns (UpdateDraftPlanOverviewResponse) {}
+  rpc UpdatePublishedPlanOverview(UpdatePublishedPlanOverviewRequest) returns (UpdatePublishedPlanOverviewResponse) {}
+  rpc UpdatePlanTrial(UpdatePlanTrialRequest) returns (UpdatePlanTrialResponse) {}
+  rpc ListPlanVersionById(ListPlanVersionByIdRequest) returns (ListPlanVersionByIdResponse) {}
+  rpc CopyVersionToDraft(CopyVersionToDraftRequest) returns (CopyVersionToDraftResponse) {}
+  rpc PublishPlanVersion(PublishPlanVersionRequest) returns (PublishPlanVersionResponse) {}
+  rpc DiscardDraftVersion(DiscardDraftVersionRequest) returns (DiscardDraftVersionResponse) {}
+  rpc GetPlanParameters(GetPlanParametersRequest) returns (GetPlanParametersResponse) {}
+  rpc ArchivePlan(ArchivePlanRequest) returns (ArchivePlanResponse) {}
+  rpc UnarchivePlan(UnarchivePlanRequest) returns (UnarchivePlanResponse) {}
+}
+```
+
+## RPC Methods
+
+### CreateDraftPlan
+
+Creates a new plan in draft status.
+
+<ParamField path="name" type="string" required>
+  Plan name
+</ParamField>
+
+<ParamField path="description" type="string">
+  Plan description
+</ParamField>
+
+<ParamField path="product_family_local_id" type="string" required>
+  Product family identifier
+</ParamField>
+
+<ParamField path="plan_type" type="PlanType" required>
+  Plan type: `STANDARD`, `FREE`, `CUSTOM`
+</ParamField>
+
+<ParamField path="currency" type="string" required>
+  Currency code (e.g., USD, EUR)
+</ParamField>
+
+**Response:** Returns `PlanWithVersion` containing the plan and its initial draft version.
+
+### UpdateDraftPlanOverview
+
+Updates metadata for a draft plan version.
+
+<ParamField path="plan_version_id" type="string" required>
+  Plan version ID
+</ParamField>
+
+<ParamField path="plan_id" type="string" required>
+  Plan ID
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Updated plan name
+</ParamField>
+
+<ParamField path="description" type="string">
+  Updated description
+</ParamField>
+
+<ParamField path="currency" type="string" required>
+  Currency code
+</ParamField>
+
+<ParamField path="net_terms" type="uint32" required>
+  Payment terms in days
+</ParamField>
+
+**Response:** Returns updated `PlanWithVersion`.
+
+### UpdatePublishedPlanOverview
+
+Updates metadata for a published plan (limited fields).
+
+<ParamField path="plan_id" type="string" required>
+  Plan ID
+</ParamField>
+
+<ParamField path="plan_version_id" type="string" required>
+  Published version ID
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Updated plan name
+</ParamField>
+
+<ParamField path="description" type="string">
+  Updated description
+</ParamField>
+
+<ParamField path="self_service_rank" type="int32">
+  Display rank for self-service ordering
+</ParamField>
+
+**Response:** Returns updated `PlanOverview`.
+
+### UpdatePlanTrial
+
+Configures trial period settings for a plan.
+
+<ParamField path="plan_id" type="string" required>
+  Plan ID
+</ParamField>
+
+<ParamField path="plan_version_id" type="string" required>
+  Plan version ID
+</ParamField>
+
+<ParamField path="trial" type="TrialConfig" required>
+  Trial configuration
+  
+  <Expandable title="TrialConfig fields">
+    <ParamField path="duration_days" type="uint32" required>
+      Trial duration in days
+    </ParamField>
+    <ParamField path="trial_is_free" type="bool" required>
+      Whether trial is free or charges apply
+    </ParamField>
+    <ParamField path="trialing_plan_id" type="string">
+      Alternative plan ID to use during trial
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Response:** Returns updated `PlanWithVersion`.
+
+### ListPlans
+
+Retrieves a paginated list of plans.
+
+<ParamField path="product_family_local_id" type="string">
+  Filter by product family
+</ParamField>
+
+<ParamField path="filters" type="PlanFilters">
+  Additional filters:
+  - `search`: Search query
+  - `types`: Plan types filter
+  - `statuses`: Status filter
+  - `currency`: Currency filter
+</ParamField>
+
+<ParamField path="sort_by" type="SortBy">
+  Sort order: `DATE_DESC`, `DATE_ASC`, `NAME_DESC`, `NAME_ASC`
+</ParamField>
+
+<ParamField path="pagination" type="Pagination">
+  Pagination parameters
+</ParamField>
+
+**Response:** Returns paginated list of `PlanOverview` objects.
+
+### GetPlanOverview
+
+Retrieves plan overview by local ID.
+
+<ParamField path="local_id" type="string" required>
+  Plan local identifier
+</ParamField>
+
+**Response:** Returns `PlanOverview` with summary information.
+
+### GetPlanWithVersion
+
+Retrieves plan with specific version details.
+
+<ParamField path="local_id" type="string" required>
+  Plan local identifier
+</ParamField>
+
+<ParamField path="filter" type="oneof">
+  Version selector:
+  - `version`: Specific version number
+  - `draft`: Get draft version
+  - `active`: Get active version
+</ParamField>
+
+**Response:** Returns `PlanWithVersion`.
+
+### GetPlanWithVersionByVersionId
+
+Retrieves plan by version ID.
+
+<ParamField path="local_id" type="string" required>
+  Plan version ID
+</ParamField>
+
+**Response:** Returns `PlanWithVersion`.
+
+### ListPlanVersionById
+
+Lists all versions of a plan.
+
+<ParamField path="plan_id" type="string" required>
+  Plan ID
+</ParamField>
+
+<ParamField path="pagination" type="Pagination">
+  Pagination parameters
+</ParamField>
+
+**Response:** Returns paginated list of `ListPlanVersion` objects.
+
+### CopyVersionToDraft
+
+Creates a new draft version by copying an existing version.
+
+<ParamField path="plan_id" type="string" required>
+  Plan ID
+</ParamField>
+
+<ParamField path="plan_version_id" type="string" required>
+  Source version ID to copy
+</ParamField>
+
+**Response:** Returns new draft `PlanVersion`.
+
+### PublishPlanVersion
+
+Publishes a draft version, making it the active version.
+
+<ParamField path="plan_id" type="string" required>
+  Plan ID
+</ParamField>
+
+<ParamField path="plan_version_id" type="string" required>
+  Draft version ID to publish
+</ParamField>
+
+**Response:** Returns published `PlanVersion`.
+
+### DiscardDraftVersion
+
+Deletes a draft version.
+
+<ParamField path="plan_id" type="string" required>
+  Plan ID
+</ParamField>
+
+<ParamField path="plan_version_id" type="string" required>
+  Draft version ID to discard
+</ParamField>
+
+### GetPlanParameters
+
+Retrieves customizable parameters for a plan version.
+
+<ParamField path="plan_version_id" type="string" required>
+  Plan version ID
+</ParamField>
+
+**Response:** Returns list of `PlanParameter` objects describing parameterizable components.
+
+### ArchivePlan
+
+Archives a plan, preventing new subscriptions.
+
+<ParamField path="id" type="string" required>
+  Plan ID to archive
+</ParamField>
+
+### UnarchivePlan
+
+Unarchives a previously archived plan.
+
+<ParamField path="id" type="string" required>
+  Plan ID to unarchive
+</ParamField>
+
+## Data Models
+
+### Plan
+
+Core plan information.
+
+<ParamField path="id" type="string">
+  Plan ID
+</ParamField>
+
+<ParamField path="name" type="string">
+  Plan name
+</ParamField>
+
+<ParamField path="local_id" type="string">
+  Human-readable local identifier
+</ParamField>
+
+<ParamField path="description" type="string">
+  Plan description
+</ParamField>
+
+<ParamField path="plan_type" type="PlanType">
+  Plan type
+</ParamField>
+
+<ParamField path="plan_status" type="PlanStatus">
+  Status: `DRAFT`, `ACTIVE`, `INACTIVE`, `ARCHIVED`
+</ParamField>
+
+<ParamField path="active_version_id" type="string">
+  Currently active version ID
+</ParamField>
+
+<ParamField path="draft_version_id" type="string">
+  Current draft version ID (if any)
+</ParamField>
+
+<ParamField path="self_service_rank" type="int32">
+  Display rank for self-service
+</ParamField>
+
+### PlanVersion
+
+Specific version of a plan.
+
+<ParamField path="id" type="string">
+  Version ID
+</ParamField>
+
+<ParamField path="is_draft" type="bool">
+  Whether this is a draft version
+</ParamField>
+
+<ParamField path="version" type="uint32">
+  Version number
+</ParamField>
+
+<ParamField path="trial_config" type="TrialConfig">
+  Trial configuration
+</ParamField>
+
+<ParamField path="billing_config" type="PlanBillingConfiguration">
+  Billing configuration
+</ParamField>
+
+<ParamField path="currency" type="string">
+  Currency code
+</ParamField>
+
+<ParamField path="net_terms" type="int32">
+  Payment terms in days
+</ParamField>
+
+### PlanOverview
+
+Plan summary for list views.
+
+<ParamField path="id" type="string">
+  Plan ID
+</ParamField>
+
+<ParamField path="name" type="string">
+  Plan name
+</ParamField>
+
+<ParamField path="local_id" type="string">
+  Local identifier
+</ParamField>
+
+<ParamField path="plan_type" type="PlanType">
+  Plan type
+</ParamField>
+
+<ParamField path="plan_status" type="PlanStatus">
+  Current status
+</ParamField>
+
+<ParamField path="created_at" type="string">
+  Creation timestamp
+</ParamField>
+
+<ParamField path="active_version" type="ActiveVersionInfo">
+  Active version information
+</ParamField>
+
+<ParamField path="has_draft_version" type="bool">
+  Whether a draft version exists
+</ParamField>
+
+<ParamField path="subscription_count" type="uint32">
+  Number of active subscriptions
+</ParamField>
+
+<ParamField path="product_family_local_id" type="string">
+  Product family identifier
+</ParamField>
+
+### PlanBillingConfiguration
+
+Billing behavior configuration.
+
+<ParamField path="net_terms" type="uint32">
+  Payment terms in days
+</ParamField>
+
+<ParamField path="service_period_start" type="oneof">
+  When billing period starts:
+  - `day_of_month`: Specific day of month (1-31)
+  - `subscription_anniversary`: Subscription start date anniversary
+</ParamField>
+
+<ParamField path="billing_cycles" type="oneof">
+  Number of billing cycles:
+  - `fixed`: Limited number of cycles
+  - `forever`: Unlimited billing
+</ParamField>
+
+### PlanType
+
+Enum values:
+- `STANDARD`: Standard paid plan
+- `FREE`: Free plan
+- `CUSTOM`: Custom negotiated plan
+
+### PlanStatus
+
+Enum values:
+- `DRAFT`: Draft plan (not available for subscriptions)
+- `ACTIVE`: Active and available
+- `INACTIVE`: Inactive (not available for new subscriptions)
+- `ARCHIVED`: Archived (hidden from lists)
+
+### PlanParameter
+
+Parameterizable plan component.
+
+<ParamField path="param" type="oneof">
+  Parameter type:
+  - `billing_period_term`: Billing period selection
+  - `capacity_threshold_value`: Capacity tier selection
+  - `committed_slot`: Committed slot count
+</ParamField>
+
+## Proto Location
+
+- Service definition: `proto/api/plans/v1/plans.proto`
+- Models: `proto/api/plans/v1/models.proto`

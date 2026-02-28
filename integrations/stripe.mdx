@@ -1,0 +1,379 @@
+---
+title: 'Stripe Integration'
+description: 'Process payments and manage subscriptions with Stripe'
+icon: 'stripe'
+---
+
+Meteroid provides a comprehensive Stripe integration for payment processing, customer management, and subscription billing.
+
+## Overview
+
+The Stripe integration enables:
+- **Payment processing** - Accept one-time and recurring payments
+- **Payment methods** - Store and manage customer payment methods
+- **Customer sync** - Synchronize customer data between Meteroid and Stripe
+- **Invoice reconciliation** - Match Stripe payments to Meteroid invoices
+- **Webhook handling** - Process Stripe webhook events
+
+## Configuration
+
+### Environment Variables
+
+Configure your Stripe integration using environment variables:
+
+```bash
+STRIPE_API_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+### Connect Stripe Account
+
+To connect a Stripe account, Meteroid validates the API key and retrieves the account ID:
+
+```rust
+// Account validation happens automatically
+// Source: modules/meteroid/crates/meteroid-store/src/services/connectors/stripe.rs
+let account = stripe_client
+    .get_account(&secret_key)
+    .await?;
+```
+
+<Info>
+Meteroid uses Stripe API version **2022-11-15** for all requests.
+</Info>
+
+## Payment Processing
+
+### Payment Intents
+
+Process one-time payments using Stripe Payment Intents:
+
+```rust
+// Payment intents are created and managed through the Stripe client
+// Supports automatic retry logic and idempotency
+use stripe_client::payment_intents::PaymentIntentApi;
+```
+
+**Supported Operations**:
+- Create payment intent
+- Confirm payment
+- Capture authorized payment
+- Handle payment failures
+
+### Setup Intents
+
+Save payment methods for future use:
+
+```rust
+// Setup intents enable saving payment methods without charging
+// Source: modules/meteroid/crates/stripe-client/src/setup_intents.rs
+use stripe_client::setup_intents::SetupIntentApi;
+```
+
+**Use Cases**:
+- Save card for subscription billing
+- Collect payment method before trial ends
+- Update expired payment methods
+
+### Payment Methods
+
+Manage stored payment methods:
+
+```rust
+// Payment methods API for managing saved cards and bank accounts
+// Source: modules/meteroid/crates/stripe-client/src/payment_methods.rs
+use stripe_client::payment_methods::PaymentMethodApi;
+```
+
+## Customer Management
+
+Sync customers between Meteroid and Stripe:
+
+### Create Stripe Customer
+
+```rust
+use stripe_client::customers::{CustomerApi, CreateCustomer, OptionalFieldsAddress};
+
+let customer = CreateCustomer {
+    name: Some("Acme Corp".to_string()),
+    email: Some("billing@acme.com".to_string()),
+    phone: Some("+1234567890".to_string()),
+    description: Some("Enterprise customer".to_string()),
+    address: Some(OptionalFieldsAddress {
+        line1: Some("123 Main St".to_string()),
+        city: Some("San Francisco".to_string()),
+        state: Some("CA".to_string()),
+        postal_code: Some("94102".to_string()),
+        country: Some(CountryCode::US),
+        ..Default::default()
+    }),
+    metadata: Some(metadata),
+    ..Default::default()
+};
+
+let stripe_customer = stripe_client
+    .create_customer(customer, &secret_key, idempotency_key)
+    .await?;
+```
+
+### Customer Fields
+
+<ParamField path="name" type="string">
+  Customer's full name or business name
+</ParamField>
+
+<ParamField path="email" type="string">
+  Customer's email address for receipts
+</ParamField>
+
+<ParamField path="phone" type="string">
+  Customer's phone number with extension
+</ParamField>
+
+<ParamField path="address" type="object">
+  Customer's billing address
+  - `line1` - Street address
+  - `line2` - Apartment, suite, etc.
+  - `city` - City name
+  - `state` - State or province
+  - `postal_code` - ZIP or postal code
+  - `country` - Two-letter country code (ISO 3166-1)
+</ParamField>
+
+<ParamField path="metadata" type="object">
+  Custom key-value pairs for your own use
+</ParamField>
+
+<ParamField path="preferred_locales" type="array">
+  Customer's preferred languages for invoices
+</ParamField>
+
+## Webhook Events
+
+Meteroid processes the following Stripe webhook events:
+
+### Supported Events
+
+<CodeGroup>
+```rust Event Types
+// Source: modules/meteroid/crates/stripe-client/src/webhook.rs
+
+pub mod event_type {
+    pub const SETUP_INTENT_SUCCEEDED: &str = "setup_intent.succeeded";
+    pub const PAYMENT_INTENT_SUCCEEDED: &str = "payment_intent.succeeded";
+    pub const PAYMENT_INTENT_FAILED: &str = "payment_intent.payment_failed";
+    pub const PAYMENT_INTENT_PARTIALLY_FUNDED: &str = "payment_intent.partially_funded";
+}
+```
+</CodeGroup>
+
+### Event Processing
+
+<Steps>
+  <Step title="Validate Signature">
+    All webhook payloads are validated using HMAC-SHA256:
+    
+    ```rust
+    use stripe_client::webhook::StripeWebhook;
+    
+    StripeWebhook::validate_signature(
+        payload,
+        signature_header,
+        webhook_secret
+    )?;
+    ```
+    
+    <Info>
+    Meteroid validates webhook timestamps to prevent replay attacks. Events older than 5 minutes are rejected.
+    </Info>
+  </Step>
+  
+  <Step title="Parse Event">
+    Deserialize the webhook payload:
+    
+    ```rust
+    let event = StripeWebhook::parse_event(payload)?;
+    
+    match event.data.object {
+        EventObject::PaymentIntent(intent) => {
+            // Handle payment intent
+        },
+        EventObject::SetupIntent(intent) => {
+            // Handle setup intent
+        },
+    }
+    ```
+  </Step>
+  
+  <Step title="Process Event">
+    Handle the event based on type:
+    - **setup_intent.succeeded** - Payment method saved
+    - **payment_intent.succeeded** - Payment completed
+    - **payment_intent.payment_failed** - Payment failed
+    - **payment_intent.partially_funded** - Partial payment received
+  </Step>
+</Steps>
+
+## Client Configuration
+
+### API Client
+
+The Stripe client is configured with:
+
+```rust
+// Source: modules/meteroid/crates/stripe-client/src/client.rs
+
+let stripe_client = StripeClient::from_parts(
+    "https://api.stripe.com/",
+    Duration::from_secs(5),   // Connection timeout
+    Duration::from_secs(10),  // Request timeout
+);
+```
+
+### Request Headers
+
+All requests include:
+- **Stripe-Version**: `2022-11-15`
+- **User-Agent**: `Meteroid/Stripe/v1`
+- **Authorization**: `Bearer sk_...`
+- **Idempotency-Key**: Unique key for safe retries
+
+### Retry Strategy
+
+Automatic retry with exponential backoff:
+- Respects `Stripe-Should-Retry` header
+- Retries on network errors
+- Handles rate limits
+- Configurable max attempts
+
+## Invoice Management
+
+Create and manage Stripe invoices:
+
+```rust
+// Invoice operations through Stripe API
+// Source: modules/meteroid/crates/stripe-client/src/invoice.rs
+use stripe_client::invoice::InvoiceApi;
+```
+
+**Operations**:
+- Create invoice
+- Finalize invoice
+- Send invoice to customer
+- Mark invoice as paid
+- Void invoice
+
+## Error Handling
+
+Stripe errors are handled with detailed context:
+
+```rust
+// Source: modules/meteroid/crates/stripe-client/src/error.rs
+
+match stripe_error {
+    StripeError::Http(status) => {
+        // HTTP errors (4xx, 5xx)
+    },
+    StripeError::ClientError(msg) => {
+        // Client configuration errors
+    },
+    StripeError::QueryStringSerialize(err) => {
+        // Request serialization errors
+    },
+}
+```
+
+### Common Errors
+
+<Warning>
+**Authentication Failed** - Invalid or expired API key
+- Check your `STRIPE_API_KEY` environment variable
+- Ensure you're using the correct key for your environment (test vs. live)
+</Warning>
+
+<Warning>
+**Rate Limited** - Too many requests
+- Meteroid automatically retries with backoff
+- Consider implementing request batching
+</Warning>
+
+<Warning>
+**Idempotency Error** - Duplicate request with different parameters
+- Each idempotent request must use a unique key
+- Keys can be reused only with identical parameters
+</Warning>
+
+## Testing
+
+Use Stripe test mode for development:
+
+```bash
+# Test API key
+STRIPE_API_KEY=sk_test_...
+
+# Test webhook secret
+STRIPE_WEBHOOK_SECRET=whsec_test_...
+```
+
+### Test Cards
+
+| Card Number | Result |
+|------------|--------|
+| `4242424242424242` | Success |
+| `4000000000000002` | Card declined |
+| `4000002500003155` | Requires authentication |
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Idempotency Keys">
+    Always provide unique idempotency keys for POST requests:
+    
+    ```rust
+    let idempotency_key = uuid::Uuid::new_v4().to_string();
+    ```
+    
+    This ensures requests can be safely retried without duplicate charges.
+  </Accordion>
+  
+  <Accordion title="Handle Webhooks Asynchronously">
+    Process webhooks in background jobs to:
+    - Return 200 status quickly
+    - Avoid timeouts
+    - Enable retries on failure
+  </Accordion>
+  
+  <Accordion title="Store Stripe IDs">
+    Always store Stripe customer and subscription IDs:
+    - Enables reconciliation
+    - Supports customer portal
+    - Simplifies refunds and disputes
+  </Accordion>
+  
+  <Accordion title="Monitor Webhook Health">
+    Use Stripe Dashboard to monitor:
+    - Webhook delivery success rate
+    - Failed event retries
+    - Response times
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Webhooks" icon="webhook" href="/integrations/webhooks">
+    Configure outgoing webhooks
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Explore payment APIs
+  </Card>
+  
+  <Card title="Stripe Documentation" icon="book" href="https://stripe.com/docs">
+    Official Stripe docs
+  </Card>
+  
+  <Card title="Testing Guide" icon="flask" href="https://stripe.com/docs/testing">
+    Stripe test mode guide
+  </Card>
+</CardGroup>

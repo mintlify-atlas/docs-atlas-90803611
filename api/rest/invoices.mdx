@@ -1,0 +1,282 @@
+---
+title: "Invoices"
+description: "Retrieve and manage customer invoices"
+---
+
+Invoices represent billing documents issued to customers for subscription charges and usage.
+
+## List Invoices
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/invoices?page=0&per_page=20" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/invoices`
+
+List invoices with optional filtering by customer, subscription, or status.
+
+### Query Parameters
+
+<ParamField query="customer_id" type="string">
+  Filter by customer ID or alias
+</ParamField>
+
+<ParamField query="subscription_id" type="string">
+  Filter by subscription ID
+</ParamField>
+
+<ParamField query="statuses" type="array">
+  Filter by statuses: `Draft`, `Finalized`, `Uncollectible`, `Void`
+</ParamField>
+
+<ParamField query="page" type="integer">
+  Page number (0-indexed)
+</ParamField>
+
+<ParamField query="per_page" type="integer">
+  Number of items per page (1-100)
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="array">
+  Array of invoice objects
+  
+  <Expandable title="Invoice properties">
+    <ResponseField name="id" type="string" required>
+      Invoice ID (format: inv_xxx)
+    </ResponseField>
+    
+    <ResponseField name="invoice_number" type="string" required>
+      Human-readable invoice number
+    </ResponseField>
+    
+    <ResponseField name="status" type="string" required>
+      Status: `Draft`, `Finalized`, `Uncollectible`, `Void`
+    </ResponseField>
+    
+    <ResponseField name="customer_id" type="string" required>
+      Customer ID
+    </ResponseField>
+    
+    <ResponseField name="currency" type="string" required>
+      Currency code (e.g., USD, EUR)
+    </ResponseField>
+    
+    <ResponseField name="invoice_date" type="string" required>
+      Invoice issue date
+    </ResponseField>
+    
+    <ResponseField name="due_date" type="string">
+      Payment due date
+    </ResponseField>
+    
+    <ResponseField name="subtotal" type="integer" required>
+      Subtotal in cents
+    </ResponseField>
+    
+    <ResponseField name="tax_amount" type="integer" required>
+      Tax amount in cents
+    </ResponseField>
+    
+    <ResponseField name="total" type="integer" required>
+      Total amount in cents
+    </ResponseField>
+    
+    <ResponseField name="amount_due" type="integer" required>
+      Outstanding amount in cents
+    </ResponseField>
+    
+    <ResponseField name="payment_status" type="string" required>
+      Payment status: `Unpaid`, `PartiallyPaid`, `Paid`, `Errored`
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination_meta" type="object">
+  Pagination metadata
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "data": [
+    {
+      "id": "inv_7n42DGM5Tflk9n8mt7Fhc7",
+      "invoice_number": "INV-2024-001",
+      "status": "Finalized",
+      "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+      "subscription_id": "sub_7n42DGM5Tflk9n8mt7Fhc7",
+      "currency": "USD",
+      "invoice_date": "2024-01-01",
+      "due_date": "2024-01-15",
+      "subtotal": 9900,
+      "subtotal_recurring": 9900,
+      "tax_amount": 990,
+      "total": 10890,
+      "amount_due": 10890,
+      "payment_status": "Unpaid",
+      "invoice_type": "Recurring",
+      "net_terms": 14,
+      "line_items": [],
+      "tax_breakdown": [],
+      "transactions": [],
+      "customer_details": {
+        "id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+        "name": "Acme Corporation",
+        "snapshot_at": "2024-01-01T00:00:00Z"
+      },
+      "applied_credits": 0,
+      "coupons": [],
+      "created_at": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "pagination_meta": {
+    "page": 0,
+    "per_page": 20,
+    "total_items": 1,
+    "total_pages": 1
+  }
+}
+```
+</ResponseExample>
+
+## Get Invoice
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/invoices/{invoice_id}" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/invoices/{invoice_id}`
+
+Retrieve a single invoice with its payment transactions.
+
+### Path Parameters
+
+<ParamField path="invoice_id" type="string" required>
+  Invoice ID (e.g., inv_123)
+</ParamField>
+
+### Response
+
+<ResponseField name="invoice" type="object">
+  Complete invoice details including line items, tax breakdown, and payment transactions
+  
+  <Expandable title="properties">
+    <ResponseField name="id" type="string" required>
+      Invoice ID
+    </ResponseField>
+    
+    <ResponseField name="invoice_number" type="string" required>
+      Invoice number
+    </ResponseField>
+    
+    <ResponseField name="status" type="string" required>
+      Invoice status
+    </ResponseField>
+    
+    <ResponseField name="line_items" type="array" required>
+      Array of invoice line items
+    </ResponseField>
+    
+    <ResponseField name="tax_breakdown" type="array" required>
+      Tax breakdown by rate
+    </ResponseField>
+    
+    <ResponseField name="transactions" type="array" required>
+      Payment transactions
+    </ResponseField>
+    
+    <ResponseField name="customer_details" type="object" required>
+      Customer information snapshot
+    </ResponseField>
+    
+    <ResponseField name="coupons" type="array" required>
+      Applied coupon line items
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "id": "inv_7n42DGM5Tflk9n8mt7Fhc7",
+  "invoice_number": "INV-2024-001",
+  "status": "Finalized",
+  "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+  "subscription_id": "sub_7n42DGM5Tflk9n8mt7Fhc7",
+  "currency": "USD",
+  "invoice_date": "2024-01-01",
+  "due_date": "2024-01-15",
+  "subtotal": 9900,
+  "subtotal_recurring": 9900,
+  "tax_amount": 990,
+  "total": 10890,
+  "amount_due": 10890,
+  "payment_status": "Unpaid",
+  "invoice_type": "Recurring",
+  "net_terms": 14,
+  "line_items": [
+    {
+      "name": "Pro Plan - Monthly",
+      "description": null,
+      "quantity": "1",
+      "unit_price": "99.00",
+      "amount_total": 9900,
+      "start_date": "2024-01-01",
+      "end_date": "2024-02-01",
+      "tax_rate": "0.10",
+      "sub_line_items": []
+    }
+  ],
+  "tax_breakdown": [
+    {
+      "tax_name": "Sales Tax",
+      "tax_rate": "0.10",
+      "tax_amount": 990
+    }
+  ],
+  "transactions": [],
+  "customer_details": {
+    "id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+    "name": "Acme Corporation",
+    "email": "billing@acme.com",
+    "snapshot_at": "2024-01-01T00:00:00Z"
+  },
+  "applied_credits": 0,
+  "coupons": [],
+  "created_at": "2024-01-01T00:00:00Z",
+  "finalized_at": "2024-01-01T00:05:00Z"
+}
+```
+</ResponseExample>
+
+## Download Invoice PDF
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/invoices/{invoice_id}/download" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  --output invoice.pdf
+```
+</CodeGroup>
+
+**GET** `/api/v1/invoices/{invoice_id}/download`
+
+Download the PDF document for an invoice.
+
+### Path Parameters
+
+<ParamField path="invoice_id" type="string" required>
+  Invoice ID (e.g., inv_123)
+</ParamField>
+
+### Response
+
+Returns a binary PDF file with `Content-Type: application/pdf`.

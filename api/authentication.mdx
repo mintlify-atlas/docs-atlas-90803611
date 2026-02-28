@@ -1,0 +1,283 @@
+---
+title: "Authentication"
+description: "Secure your API requests with API tokens"
+---
+
+Meteroid uses API token authentication to secure API requests. API tokens provide tenant-scoped access to the Meteroid API.
+
+## Authentication Methods
+
+Meteroid supports three authentication methods:
+
+### 1. API Key Authentication
+
+API keys are the recommended method for machine-to-machine authentication. They provide tenant-scoped access and are suitable for server-side integrations.
+
+**Header:** `x-api-key`
+
+```bash
+curl -H "x-api-key: your-api-key-here" \
+  http://localhost:50061/api/customers
+```
+
+### 2. JWT Bearer Authentication
+
+JWT tokens are used for user authentication, primarily in the web application. They provide user-scoped access with organization and tenant context.
+
+**Header:** `Authorization: Bearer <token>`
+
+```bash
+curl -H "Authorization: Bearer eyJhbGci..." \
+  http://localhost:50061/api/customers
+```
+
+### 3. Portal JWT Authentication
+
+Portal JWTs are used for customer-facing portals (checkout, invoices, quotes). They provide limited access to specific resources.
+
+**Header:** `x-md-portal-jwt`
+
+## Creating API Tokens
+
+API tokens can be created through the gRPC API using the `ApiTokensService`.
+
+### Using gRPC
+
+```proto
+service ApiTokensService {
+  rpc CreateApiToken(CreateApiTokenRequest) returns (CreateApiTokenResponse) {}
+  rpc ListApiTokens(ListApiTokensRequest) returns (ListApiTokensResponse) {}
+  rpc GetApiTokenById(GetApiTokenByIdRequest) returns (GetApiTokenByIdResponse) {}
+  rpc RevokeApiToken(RevokeApiTokenRequest) returns (RevokeApiTokenResponse) {}
+}
+```
+
+### Request Structure
+
+```proto
+message CreateApiTokenRequest {
+  string name = 1;
+}
+```
+
+### Response Structure
+
+```proto
+message CreateApiTokenResponse {
+  string api_key = 1;      // The actual API key (only shown once)
+  ApiToken details = 2;     // Token metadata
+}
+
+message ApiToken {
+  string id = 1;
+  string tenant_id = 2;
+  string name = 3;
+  string hint = 4;          // Last few characters for identification
+  string created_at = 5;
+  string created_by = 6;
+}
+```
+
+<Warning>
+  The API key is only returned once during creation. Store it securely - you won't be able to retrieve it again.
+</Warning>
+
+## API Token Format
+
+Meteroid API tokens follow a specific format:
+
+```
+mtr_<version>_<identifier>_<secret>
+```
+
+- **Prefix**: `mtr_` identifies it as a Meteroid token
+- **Version**: Version identifier for the token format
+- **Identifier**: UUID that identifies the token in the database
+- **Secret**: The secret portion used for validation
+
+Example:
+```
+mtr_v1_550e8400-e29b-41d4-a716-446655440000_abcdef123456...
+```
+
+## Token Security
+
+### Storage
+
+Meteroid stores a hash of the API token, not the token itself. When validating:
+
+1. The identifier is extracted from the token
+2. The stored hash is retrieved from the database
+3. The token's secret is validated against the hash
+
+### Best Practices
+
+<AccordionGroup>
+  <Accordion title="Store tokens securely">
+    - Use environment variables or secret management systems
+    - Never commit tokens to version control
+    - Rotate tokens regularly
+  </Accordion>
+
+  <Accordion title="Scope tokens appropriately">
+    - Create separate tokens for different services
+    - Use descriptive names to identify token purposes
+    - Revoke unused tokens immediately
+  </Accordion>
+
+  <Accordion title="Monitor token usage">
+    - Track which tokens are being used
+    - Set up alerts for suspicious activity
+    - Review token list regularly
+  </Accordion>
+</AccordionGroup>
+
+## Token Permissions
+
+API tokens are tenant-scoped and provide access to most API endpoints with these restrictions:
+
+### Allowed Operations
+
+- Customer management
+- Subscription operations
+- Invoicing
+- Product catalog
+- Billable metrics
+- Price management
+- Plan operations
+
+### Restricted Operations
+
+API tokens **cannot** access:
+
+- Organization management (`OrganizationsService`)
+- User management (`UsersService`)
+- API token management (`ApiTokensService`)
+- Tenant management (`TenantsService`)
+- Instance configuration (`InstanceService`)
+
+These operations require user JWT authentication.
+
+## Managing API Tokens
+
+### List All Tokens
+
+Retrieve all API tokens for your tenant:
+
+```proto
+message ListApiTokensRequest {}
+
+message ListApiTokensResponse {
+  repeated ApiToken api_tokens = 1;
+}
+```
+
+### Get Token Details
+
+Retrieve details about a specific token:
+
+```proto
+message GetApiTokenByIdRequest {
+  string id = 1;
+}
+
+message GetApiTokenByIdResponse {
+  string tenant_id = 1;
+  string hash = 2;
+}
+```
+
+### Revoke a Token
+
+Revoke a token to immediately disable it:
+
+```proto
+message RevokeApiTokenRequest {
+  string id = 1;
+}
+
+message RevokeApiTokenResponse {}
+```
+
+## Token Validation
+
+### Caching
+
+API token validation results are cached for 2 minutes to improve performance:
+
+- Cache size: 100 tokens
+- TTL: 120 seconds
+- Key: Token identifier (UUID)
+
+### Validation Flow
+
+1. Extract token from `x-api-key` header
+2. Parse token format and extract identifier
+3. Check cache for recent validation
+4. If not cached, retrieve hash from database
+5. Validate token secret against stored hash
+6. Cache validation result
+7. Return organization and tenant IDs
+
+## Environment Configuration
+
+### JWT Secret
+
+For JWT-based authentication, configure the signing secret:
+
+```bash
+JWT_SECRET=your-secret-key-here
+```
+
+<Warning>
+  Use a strong, randomly generated secret in production. The JWT secret is used for signing user authentication tokens.
+</Warning>
+
+### Internal API Secret
+
+For internal service communication:
+
+```bash
+INTERNAL_API_SECRET=your-internal-secret
+```
+
+## Authentication Context
+
+When authenticated, requests include context headers:
+
+### Organization and Tenant Context
+
+For user JWT authentication, include the context header:
+
+**Header:** `x-md-context`
+
+**Format:** `org_<org_id>.tenant_<tenant_id>` or `org_<org_id>`
+
+Example:
+```
+x-md-context: org_123e4567-e89b-12d3-a456-426614174000.tenant_234f5678-f89c-12d3-a456-426614174001
+```
+
+## Troubleshooting
+
+### Common Authentication Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `Missing API key` | No `x-api-key` header | Include the header in your request |
+| `Invalid API key format` | Malformed token | Check token format is correct |
+| `Unauthorized` | Invalid or revoked token | Create a new API token |
+| `Forbidden` | Accessing restricted endpoint | Use user JWT for these operations |
+| `Missing JWT` | No `Authorization` header | Include Bearer token |
+| `Invalid JWT` | Token expired or malformed | Refresh your authentication token |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Introduction" icon="book" href="/api/introduction">
+    Learn about Meteroid's API architecture
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/api/errors">
+    Understand API error responses
+  </Card>
+</CardGroup>

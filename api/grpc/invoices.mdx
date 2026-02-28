@@ -1,0 +1,549 @@
+---
+title: 'Invoices Service'
+description: 'Generate, manage, and finalize invoices with payment tracking'
+---
+
+## Overview
+
+The Invoices service provides comprehensive invoice management including:
+
+- Invoice creation and finalization
+- PDF and SVG preview generation
+- Payment tracking and manual payment recording
+- Invoice status management (draft, finalized, void, uncollectible)
+- External system synchronization
+- Invoice updates and deletions
+
+## Service Definition
+
+```protobuf
+service InvoicesService {
+  rpc ListInvoices(ListInvoicesRequest) returns (ListInvoicesResponse) {}
+  rpc GetInvoice(GetInvoiceRequest) returns (GetInvoiceResponse) {}
+  rpc PreviewInvoiceSvg(PreviewInvoiceRequest) returns (PreviewInvoiceResponse) {}
+  rpc RequestPdfGeneration(RequestPdfGenerationRequest) returns (RequestPdfGenerationResponse) {}
+  rpc RefreshInvoiceData(RefreshInvoiceDataRequest) returns (RefreshInvoiceDataResponse) {}
+  rpc SyncToPennylane(SyncToPennylaneRequest) returns (SyncToPennylaneResponse) {}
+  rpc GenerateInvoicePaymentToken(GenerateInvoicePaymentTokenRequest) returns (GenerateInvoicePaymentTokenResponse) {}
+  rpc CreateInvoice(CreateInvoiceRequest) returns (CreateInvoiceResponse) {}
+  rpc PreviewNewInvoiceSvg(PreviewNewInvoiceRequest) returns (PreviewNewInvoiceResponse) {}
+  rpc FinalizeInvoice(FinalizeInvoiceRequest) returns (FinalizeInvoiceResponse) {}
+  rpc UpdateInvoice(UpdateInvoiceRequest) returns (UpdateInvoiceResponse) {}
+  rpc PreviewInvoiceUpdate(PreviewInvoiceUpdateRequest) returns (PreviewInvoiceUpdateResponse) {}
+  rpc DeleteInvoice(DeleteInvoiceRequest) returns (DeleteInvoiceResponse) {}
+  rpc VoidInvoice(VoidInvoiceRequest) returns (VoidInvoiceResponse) {}
+  rpc MarkInvoiceAsUncollectible(MarkInvoiceAsUncollectibleRequest) returns (MarkInvoiceAsUncollectibleResponse) {}
+  rpc AddManualPaymentTransaction(AddManualPaymentTransactionRequest) returns (AddManualPaymentTransactionResponse) {}
+  rpc MarkInvoiceAsPaid(MarkInvoiceAsPaidRequest) returns (MarkInvoiceAsPaidResponse) {}
+}
+```
+
+## RPC Methods
+
+### ListInvoices
+
+Retrieves a paginated list of invoices with filtering and sorting.
+
+<ParamField path="sort_by" type="SortBy">
+  Sort order: `DATE_DESC`, `DATE_ASC`, `ID_DESC`, `ID_ASC`, `NUMBER_ASC`, `NUMBER_DESC`
+</ParamField>
+
+<ParamField path="search" type="string">
+  Search query
+</ParamField>
+
+<ParamField path="pagination" type="Pagination">
+  Pagination parameters
+</ParamField>
+
+<ParamField path="status" type="InvoiceStatus">
+  Filter by status: `DRAFT`, `FINALIZED`, `UNCOLLECTIBLE`, `VOID`
+</ParamField>
+
+<ParamField path="customer_id" type="string">
+  Filter by customer ID
+</ParamField>
+
+<ParamField path="subscription_id" type="string">
+  Filter by subscription ID
+</ParamField>
+
+**Response:** Returns paginated list of `Invoice` objects.
+
+### GetInvoice
+
+Retrieves detailed invoice information.
+
+<ParamField path="id" type="string" required>
+  Invoice ID
+</ParamField>
+
+**Response:** Returns `DetailedInvoice` with complete invoice data including line items, taxes, and transactions.
+
+### CreateInvoice
+
+Creates a new invoice.
+
+<ParamField path="invoice" type="NewInvoice" required>
+  Invoice data
+  
+  <Expandable title="NewInvoice fields">
+    <ParamField path="customer_id" type="string" required>
+      Customer ID
+    </ParamField>
+    <ParamField path="invoice_date" type="string" required>
+      Invoice date (ISO 8601)
+    </ParamField>
+    <ParamField path="due_date" type="string">
+      Payment due date
+    </ParamField>
+    <ParamField path="currency" type="string" required>
+      Currency code
+    </ParamField>
+    <ParamField path="purchase_order" type="string">
+      Purchase order reference
+    </ParamField>
+    <ParamField path="line_items" type="NewInvoiceLineItem[]" required>
+      Invoice line items
+    </ParamField>
+    <ParamField path="discount" type="string">
+      Discount amount
+    </ParamField>
+    <ParamField path="customer_details" type="InlineCustomerOverride">
+      Override customer details for this invoice
+    </ParamField>
+    <ParamField path="memo" type="string">
+      Invoice memo
+    </ParamField>
+    <ParamField path="reference" type="string">
+      External reference
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Response:** Returns `DetailedInvoice` with the created invoice.
+
+### UpdateInvoice
+
+Updates a draft invoice.
+
+<ParamField path="id" type="string" required>
+  Invoice ID
+</ParamField>
+
+<ParamField path="memo" type="string">
+  Updated memo
+</ParamField>
+
+<ParamField path="reference" type="string">
+  Updated reference
+</ParamField>
+
+<ParamField path="purchase_order" type="string">
+  Updated purchase order
+</ParamField>
+
+<ParamField path="due_date" type="string">
+  Updated due date
+</ParamField>
+
+<ParamField path="line_items" type="UpdatedLineItems">
+  Updated line items
+</ParamField>
+
+<ParamField path="discount" type="string">
+  Updated discount
+</ParamField>
+
+<ParamField path="customer_details" type="UpdateInlineCustomer">
+  Updated customer details
+</ParamField>
+
+<ParamField path="invoicing_entity_id" type="string">
+  Updated invoicing entity
+</ParamField>
+
+**Response:** Returns updated `DetailedInvoice`.
+
+### FinalizeInvoice
+
+Finalizes a draft invoice, making it immutable and ready for payment.
+
+<ParamField path="id" type="string" required>
+  Invoice ID to finalize
+</ParamField>
+
+**Response:** Returns finalized `DetailedInvoice`.
+
+### DeleteInvoice
+
+Deletes a draft invoice.
+
+<ParamField path="id" type="string" required>
+  Invoice ID to delete
+</ParamField>
+
+### VoidInvoice
+
+Voids a finalized invoice.
+
+<ParamField path="id" type="string" required>
+  Invoice ID to void
+</ParamField>
+
+**Response:** Returns voided `DetailedInvoice`.
+
+### MarkInvoiceAsUncollectible
+
+Marks an invoice as uncollectible (bad debt).
+
+<ParamField path="id" type="string" required>
+  Invoice ID
+</ParamField>
+
+**Response:** Returns updated `DetailedInvoice`.
+
+### RefreshInvoiceData
+
+Recalculates invoice line items and totals based on current usage.
+
+<ParamField path="id" type="string" required>
+  Invoice ID to refresh
+</ParamField>
+
+**Response:** Returns refreshed `DetailedInvoice`.
+
+### PreviewInvoiceSvg
+
+Generates SVG preview of an existing invoice.
+
+<ParamField path="id" type="string" required>
+  Invoice ID
+</ParamField>
+
+**Response:** Returns array of SVG strings (one per page).
+
+### PreviewNewInvoiceSvg
+
+Previews a new invoice before creation.
+
+<ParamField path="invoice" type="NewInvoice" required>
+  Invoice data to preview
+</ParamField>
+
+**Response:** Returns array of SVG strings.
+
+### PreviewInvoiceUpdate
+
+Previews changes to an invoice before applying them.
+
+<ParamField path="update_request" type="UpdateInvoiceRequest" required>
+  Update request to preview
+</ParamField>
+
+**Response:** Returns preview `DetailedInvoice` with changes applied.
+
+### RequestPdfGeneration
+
+Requests asynchronous PDF generation for an invoice.
+
+<ParamField path="id" type="string" required>
+  Invoice ID
+</ParamField>
+
+### GenerateInvoicePaymentToken
+
+Generates a secure token for invoice payment.
+
+<ParamField path="invoice_id" type="string" required>
+  Invoice ID
+</ParamField>
+
+**Response:** Returns payment token string.
+
+### AddManualPaymentTransaction
+
+Records a manual payment transaction.
+
+<ParamField path="invoice_id" type="string" required>
+  Invoice ID
+</ParamField>
+
+<ParamField path="amount" type="string" required>
+  Payment amount
+</ParamField>
+
+<ParamField path="payment_date" type="string">
+  Payment date (defaults to now)
+</ParamField>
+
+<ParamField path="reference" type="string">
+  Payment reference
+</ParamField>
+
+**Response:** Returns transaction details including ID and status.
+
+### MarkInvoiceAsPaid
+
+Marks an invoice as fully paid with a single transaction.
+
+<ParamField path="invoice_id" type="string" required>
+  Invoice ID
+</ParamField>
+
+<ParamField path="total_amount" type="string" required>
+  Total amount (must match invoice amount_due)
+</ParamField>
+
+<ParamField path="payment_date" type="string">
+  Payment date
+</ParamField>
+
+<ParamField path="reference" type="string">
+  Payment reference
+</ParamField>
+
+**Response:** Returns updated `DetailedInvoice` with paid status.
+
+### SyncToPennylane
+
+Synchronizes invoices to Pennylane accounting.
+
+<ParamField path="invoice_ids" type="string[]" required>
+  List of invoice IDs to sync
+</ParamField>
+
+## Data Models
+
+### Invoice
+
+Basic invoice summary for list views.
+
+<ParamField path="id" type="string">
+  Invoice ID
+</ParamField>
+
+<ParamField path="invoice_number" type="string">
+  Human-readable invoice number
+</ParamField>
+
+<ParamField path="status" type="InvoiceStatus">
+  Invoice status
+</ParamField>
+
+<ParamField path="invoice_date" type="string">
+  Invoice date
+</ParamField>
+
+<ParamField path="customer_id" type="string">
+  Customer ID
+</ParamField>
+
+<ParamField path="customer_name" type="string">
+  Customer name
+</ParamField>
+
+<ParamField path="currency" type="string">
+  Currency code
+</ParamField>
+
+<ParamField path="total" type="int64">
+  Total amount in cents
+</ParamField>
+
+<ParamField path="payment_status" type="InvoicePaymentStatus">
+  Payment status: `UNPAID`, `PARTIALLY_PAID`, `PAID`, `ERRORED`
+</ParamField>
+
+<ParamField path="manual" type="bool">
+  Whether invoice was manually created
+</ParamField>
+
+### DetailedInvoice
+
+Complete invoice information.
+
+<ParamField path="id" type="string">
+  Invoice ID
+</ParamField>
+
+<ParamField path="invoice_number" type="string">
+  Invoice number
+</ParamField>
+
+<ParamField path="status" type="InvoiceStatus">
+  Current status
+</ParamField>
+
+<ParamField path="invoice_date" type="string">
+  Invoice date
+</ParamField>
+
+<ParamField path="due_at" type="string">
+  Payment due date
+</ParamField>
+
+<ParamField path="line_items" type="LineItem[]">
+  Invoice line items
+</ParamField>
+
+<ParamField path="coupon_line_items" type="CouponLineItem[]">
+  Applied coupon discounts
+</ParamField>
+
+<ParamField path="tax_breakdown" type="TaxBreakdownItem[]">
+  Tax breakdown by rate
+</ParamField>
+
+<ParamField path="subtotal" type="int64">
+  Subtotal before tax (cents)
+</ParamField>
+
+<ParamField path="subtotal_recurring" type="int64">
+  Recurring subtotal (cents)
+</ParamField>
+
+<ParamField path="tax_amount" type="int64">
+  Total tax amount (cents)
+</ParamField>
+
+<ParamField path="total" type="int64">
+  Total including tax (cents)
+</ParamField>
+
+<ParamField path="amount_due" type="int64">
+  Amount due after credits (cents)
+</ParamField>
+
+<ParamField path="applied_credits" type="int64">
+  Credits applied (cents)
+</ParamField>
+
+<ParamField path="discount" type="int64">
+  Discount amount (cents)
+</ParamField>
+
+<ParamField path="payment_status" type="InvoicePaymentStatus">
+  Payment status
+</ParamField>
+
+<ParamField path="transactions" type="Transaction[]">
+  Payment transactions
+</ParamField>
+
+<ParamField path="customer_details" type="InlineCustomer">
+  Customer snapshot
+</ParamField>
+
+<ParamField path="manual" type="bool">
+  Manual creation flag
+</ParamField>
+
+### LineItem
+
+Individual invoice line item.
+
+<ParamField path="id" type="string">
+  Line item ID
+</ParamField>
+
+<ParamField path="name" type="string">
+  Line item name
+</ParamField>
+
+<ParamField path="subtotal" type="int64">
+  Subtotal (cents)
+</ParamField>
+
+<ParamField path="tax_rate" type="string">
+  Tax rate (decimal)
+</ParamField>
+
+<ParamField path="unit_price" type="string">
+  Unit price
+</ParamField>
+
+<ParamField path="quantity" type="string">
+  Quantity
+</ParamField>
+
+<ParamField path="start_date" type="string">
+  Service period start
+</ParamField>
+
+<ParamField path="end_date" type="string">
+  Service period end
+</ParamField>
+
+<ParamField path="sub_line_items" type="SubLineItem[]">
+  Sub-items (e.g., for tiered pricing)
+</ParamField>
+
+<ParamField path="is_prorated" type="bool">
+  Whether line item is prorated
+</ParamField>
+
+<ParamField path="description" type="string">
+  Line item description
+</ParamField>
+
+### Transaction
+
+Payment transaction record.
+
+<ParamField path="id" type="string">
+  Transaction ID
+</ParamField>
+
+<ParamField path="amount" type="uint64">
+  Transaction amount (cents)
+</ParamField>
+
+<ParamField path="currency" type="string">
+  Currency code
+</ParamField>
+
+<ParamField path="status" type="PaymentStatusEnum">
+  Status: `READY`, `PENDING`, `SETTLED`, `CANCELLED`, `FAILED`
+</ParamField>
+
+<ParamField path="payment_type" type="PaymentTypeEnum">
+  Type: `PAYMENT`, `REFUND`
+</ParamField>
+
+<ParamField path="processed_at" type="string">
+  Processing timestamp
+</ParamField>
+
+<ParamField path="payment_method_info" type="PaymentMethodInfo">
+  Payment method details
+</ParamField>
+
+### InvoiceStatus
+
+Enum values:
+- `DRAFT`: Editable draft invoice
+- `FINALIZED`: Finalized and immutable
+- `UNCOLLECTIBLE`: Marked as uncollectible
+- `VOID`: Voided invoice
+
+### InvoicePaymentStatus
+
+Enum values:
+- `UNPAID`: No payments received
+- `PARTIALLY_PAID`: Partial payment received
+- `PAID`: Fully paid
+- `ERRORED`: Payment processing error
+
+### InvoiceType
+
+Enum values:
+- `RECURRING`: Regular subscription invoice
+- `ONE_OFF`: One-time invoice
+- `ADJUSTMENT`: Adjustment invoice
+- `USAGE_THRESHOLD`: Usage threshold invoice
+
+## Proto Location
+
+- Service definition: `proto/api/invoices/v1/invoices.proto`
+- Models: `proto/api/invoices/v1/models.proto`

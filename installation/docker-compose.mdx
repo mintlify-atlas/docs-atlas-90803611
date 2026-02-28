@@ -1,0 +1,363 @@
+---
+title: Docker Compose
+description: Deploy Meteroid using Docker Compose
+---
+
+Deploy Meteroid locally or in production using Docker Compose. This is the simplest way to get started with Meteroid.
+
+## Prerequisites
+
+- Docker Engine 20.10+
+- Docker Compose 2.0+
+- At least 4GB of RAM available
+
+## Quick Start
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/meteroid-oss/meteroid.git
+    cd meteroid
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Create a `.env` file from the example:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Edit `.env` and set the required secrets:
+
+    ```bash
+    # Required: Platform secrets
+    JWT_SECRET=your-jwt-secret-here
+    INTERNAL_API_SECRET=your-internal-api-secret-here
+    SECRETS_CRYPT_KEY=your-32-character-encryption-key
+
+    # Required: Database password
+    DATABASE_PASSWORD=your-secure-password
+
+    # Required: ClickHouse credentials
+    CLICKHOUSE_PASSWORD=your-clickhouse-password
+    ```
+
+    <Warning>
+      The `SECRETS_CRYPT_KEY` must be exactly 32 characters long and should be kept secure. It's used to encrypt sensitive data like OAuth tokens.
+    </Warning>
+  </Step>
+
+  <Step title="Start the services">
+    ```bash
+    docker compose -f docker/deploy/docker-compose.yml up -d
+    ```
+
+    This will start all required services:
+    - **meteroid-db**: PostgreSQL 17.4 database
+    - **clickhouse**: ClickHouse 25.6 for analytics
+    - **redpanda**: Kafka-compatible event streaming
+    - **meteroid-api**: Core billing API (gRPC + REST)
+    - **metering-api**: Usage metering service
+    - **meteroid-scheduler**: Background job processor
+    - **meteroid-web**: Web dashboard (port 3000)
+  </Step>
+
+  <Step title="Verify the installation">
+    Check that all services are healthy:
+
+    ```bash
+    docker compose -f docker/deploy/docker-compose.yml ps
+    ```
+
+    Access the web interface at [http://localhost:3000](http://localhost:3000)
+  </Step>
+</Steps>
+
+## Service Architecture
+
+### Infrastructure Services
+
+<ParamField path="meteroid-db" type="PostgreSQL 17.4">
+  Primary database for billing data, subscriptions, and configuration.
+  
+  - **Port**: 5432
+  - **Volume**: `pg_data`
+  - **Configuration**: Logical replication enabled (`wal_level=logical`)
+</ParamField>
+
+<ParamField path="clickhouse" type="ClickHouse 25.6">
+  Analytics database for usage events and metering data.
+  
+  - **Ports**: 8123 (HTTP), 9000 (Native)
+  - **Volume**: `clickhouse_data`
+  - **Default credentials**: `default/default` (change in production)
+</ParamField>
+
+<ParamField path="redpanda" type="Redpanda v23.3">
+  Kafka-compatible message broker for event streaming.
+  
+  - **Port**: 9092
+  - **Topic**: `meteroid-events-raw` (auto-created)
+  - **Volume**: `redpanda_data`
+</ParamField>
+
+### Application Services
+
+<ParamField path="meteroid-api" type="Billing API">
+  Core billing and subscription management service.
+  
+  - **gRPC Port**: 50061
+  - **REST Port**: 8084
+  - **Health check**: gRPC health probe on port 50061
+</ParamField>
+
+<ParamField path="metering-api" type="Metering API">
+  Usage metering and event ingestion service.
+  
+  - **gRPC Port**: 50062
+  - Consumes events from Kafka and stores in ClickHouse
+</ParamField>
+
+<ParamField path="meteroid-scheduler" type="Background Scheduler">
+  Handles recurring jobs like invoice generation and subscription renewals.
+  
+  - Depends on meteroid-api and database
+</ParamField>
+
+<ParamField path="meteroid-web" type="Web Dashboard">
+  User interface for managing billing and subscriptions.
+  
+  - **Port**: 3000 (mapped to container port 80)
+  - Built with React and Vite
+</ParamField>
+
+## Required Environment Variables
+
+These variables must be set in your `.env` file:
+
+### Platform Secrets
+
+<ParamField path="JWT_SECRET" type="string" required>
+  Secret key for JWT token generation and validation.
+  
+  ```bash
+  JWT_SECRET=your-random-secret-key
+  ```
+</ParamField>
+
+<ParamField path="INTERNAL_API_SECRET" type="string" required>
+  Secret for authenticating internal service-to-service communication.
+  
+  ```bash
+  INTERNAL_API_SECRET=your-internal-secret
+  ```
+</ParamField>
+
+<ParamField path="SECRETS_CRYPT_KEY" type="string" required>
+  32-character encryption key for sensitive data (OAuth tokens, API keys).
+  
+  ```bash
+  SECRETS_CRYPT_KEY=00000000000000000000000000000000
+  ```
+  
+  <Warning>Must be exactly 32 characters</Warning>
+</ParamField>
+
+### Database Configuration
+
+<ParamField path="DATABASE_USER" type="string" default="meteroid">
+  PostgreSQL database user.
+</ParamField>
+
+<ParamField path="DATABASE_PASSWORD" type="string" required>
+  PostgreSQL database password.
+</ParamField>
+
+<ParamField path="DATABASE_NAME" type="string" default="meteroid">
+  PostgreSQL database name.
+</ParamField>
+
+### ClickHouse Configuration
+
+<ParamField path="CLICKHOUSE_USERNAME" type="string" default="default">
+  ClickHouse username.
+</ParamField>
+
+<ParamField path="CLICKHOUSE_PASSWORD" type="string" default="default">
+  ClickHouse password. Change this in production.
+</ParamField>
+
+<ParamField path="CLICKHOUSE_DATABASE" type="string" default="meteroid">
+  ClickHouse database name.
+</ParamField>
+
+## Optional Configuration
+
+### Object Storage
+
+By default, Meteroid uses filesystem-based storage. For production, use S3-compatible storage:
+
+```bash
+# Filesystem (default)
+OBJECT_STORE_URI=file:///data/object-store
+
+# S3 or MinIO
+OBJECT_STORE_URI=s3://meteroid
+AWS_ALLOW_HTTP=true
+AWS_ENDPOINT=http://localhost:9002
+AWS_ACCESS_KEY_ID=meteroid
+AWS_SECRET_ACCESS_KEY=meteroid
+```
+
+### Webhooks (Svix)
+
+Enable webhook delivery via [Svix](https://www.svix.com/):
+
+```bash
+# Svix Cloud
+SVIX_JWT_TOKEN=your-svix-jwt-token
+
+# Self-hosted Svix
+SVIX_SERVER_URL=http://localhost:8071
+SVIX_JWT_TOKEN=your-generated-token
+```
+
+### Email (SMTP)
+
+Configure email sending for invoices and notifications:
+
+```bash
+MAILER_SMTP_HOST=smtp.example.com
+MAILER_SMTP_USERNAME=your-username
+MAILER_SMTP_PASSWORD=your-password
+MAILER_SMTP_TLS=true
+MAILER_FROM="Meteroid <billing@example.com>"
+```
+
+### OAuth Providers
+
+Enable OAuth integrations for Google, HubSpot, and Pennylane:
+
+```bash
+# Google OAuth
+OAUTH_GOOGLE_CLIENT_ID=your-client-id
+OAUTH_GOOGLE_CLIENT_SECRET=your-client-secret
+
+# HubSpot OAuth
+OAUTH_HUBSPOT_CLIENT_ID=your-client-id
+OAUTH_HUBSPOT_CLIENT_SECRET=your-client-secret
+
+# Pennylane OAuth
+OAUTH_PENNYLANE_CLIENT_ID=your-client-id
+OAUTH_PENNYLANE_CLIENT_SECRET=your-client-secret
+```
+
+### Telemetry
+
+Enable OpenTelemetry tracing and metrics:
+
+```bash
+TELEMETRY_TRACING_ENABLED=true
+TELEMETRY_METRICS_ENABLED=true
+TELEMETRY_OTEL_ENDPOINT=http://localhost:4317
+```
+
+## Multi-Organization Mode
+
+Enable support for multiple organizations:
+
+```bash
+ENABLE_MULTI_ORGANIZATION=true
+```
+
+## Production Deployment
+
+### Security Checklist
+
+<Check>
+  Generate strong, random values for all secrets (`JWT_SECRET`, `INTERNAL_API_SECRET`, `SECRETS_CRYPT_KEY`)
+</Check>
+
+<Check>
+  Change default database passwords for PostgreSQL and ClickHouse
+</Check>
+
+<Check>
+  Use S3-compatible object storage instead of filesystem storage
+</Check>
+
+<Check>
+  Enable TLS/SSL for external connections
+</Check>
+
+<Check>
+  Configure proper backup strategy for PostgreSQL and ClickHouse
+</Check>
+
+### Resource Allocation
+
+Minimum recommended resources for production:
+
+- **CPU**: 4 cores
+- **RAM**: 8GB
+- **Storage**: 50GB (grows with usage data)
+
+### Persistent Data
+
+The following Docker volumes contain persistent data:
+
+- `pg_data`: PostgreSQL database
+- `clickhouse_data`: ClickHouse analytics
+- `redpanda_data`: Kafka event logs
+- `object_store_data`: File storage (if using filesystem)
+
+## Troubleshooting
+
+### Services not starting
+
+Check service logs:
+
+```bash
+docker compose -f docker/deploy/docker-compose.yml logs meteroid-api
+docker compose -f docker/deploy/docker-compose.yml logs metering-api
+```
+
+### Database connection errors
+
+Verify the database is healthy:
+
+```bash
+docker compose -f docker/deploy/docker-compose.yml exec meteroid-db pg_isready
+```
+
+### ClickHouse connection issues
+
+Test ClickHouse connectivity:
+
+```bash
+curl http://localhost:8123/ping
+```
+
+### Reset everything
+
+Stop services and remove all data:
+
+```bash
+docker compose -f docker/deploy/docker-compose.yml down -v
+```
+
+<Warning>
+  This will delete all data including databases, events, and configuration.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration Reference" icon="gear" href="/installation/configuration">
+    Complete environment variable reference
+  </Card>
+  <Card title="API Documentation" icon="code" href="/api-reference/introduction">
+    Start integrating with the Meteroid API
+  </Card>
+</CardGroup>

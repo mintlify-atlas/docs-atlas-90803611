@@ -1,0 +1,265 @@
+---
+title: "Invoicing"
+description: "Automated invoice generation, finalization, and payment tracking"
+---
+
+Meteroid automates the entire invoicing process from generation through payment collection, with support for complex line items, taxes, and payment tracking.
+
+## Invoice Lifecycle
+
+<Steps>
+  <Step title="Draft">
+    Invoice created with line items. Can be edited, previewed, and adjusted.
+  </Step>
+  <Step title="Finalized">
+    Invoice locked and sent to customer. PDF generated and available for download.
+  </Step>
+  <Step title="Payment Pending">
+    Awaiting payment from customer. May have partial payments recorded.
+  </Step>
+  <Step title="Paid">
+    Full payment received and recorded.
+  </Step>
+</Steps>
+
+## Automatic Invoice Generation
+
+Meteroid automatically generates invoices based on:
+
+<CardGroup cols={2}>
+  <Card title="Subscriptions" icon="calendar-check">
+    Recurring charges at the end of each billing period
+  </Card>
+  <Card title="Usage" icon="chart-line">
+    Metered usage aggregated per billing cycle
+  </Card>
+  <Card title="Arrears vs Advance" icon="clock">
+    Bill at period start (advance) or end (arrears)
+  </Card>
+  <Card title="Proration" icon="calculator">
+    Mid-cycle changes calculated automatically
+  </Card>
+</CardGroup>
+
+## Invoice Components
+
+### Line Items
+Each invoice contains detailed line items:
+
+```typescript
+{
+  "invoice_id": "inv_abc123",
+  "line_items": [
+    {
+      "name": "Pro Plan - February 2024",
+      "quantity": "1",
+      "unit_price": "299.00",
+      "total": "299.00",
+      "period": {
+        "start": "2024-02-01",
+        "end": "2024-02-29"
+      }
+    },
+    {
+      "name": "API Calls",
+      "description": "150,000 calls @ $0.001 each",
+      "quantity": "150000",
+      "unit_price": "0.001",
+      "total": "150.00"
+    },
+    {
+      "name": "Additional Users",
+      "description": "5 users × $10/month",
+      "quantity": "5",
+      "unit_price": "10.00",
+      "total": "50.00"
+    }
+  ],
+  "subtotal": "499.00",
+  "tax": "49.90",
+  "total": "548.90"
+}
+```
+
+### Sub-line Items
+Detailed breakdowns for tiered or complex pricing:
+
+<Accordion title="Tiered Pricing Example">
+```json
+{
+  "name": "API Calls",
+  "total": "150.00",
+  "sub_line_items": [
+    {
+      "name": "First 100,000 calls",
+      "quantity": "100000",
+      "unit_price": "0.0010",
+      "total": "100.00"
+    },
+    {
+      "name": "Next 50,000 calls",
+      "quantity": "50000",
+      "unit_price": "0.0010",
+      "total": "50.00"
+    }
+  ]
+}
+```
+</Accordion>
+
+### Tax Calculation
+
+Automatic tax calculation based on:
+- Customer location
+- Product/service tax rates
+- Tax exemptions
+- Regional tax rules
+
+## Manual Invoices
+
+Create one-off invoices for:
+- Professional services
+- Custom implementation fees
+- One-time charges
+- Adjustments and corrections
+
+## Payment Tracking
+
+### Recording Payments
+
+Track payments from any source:
+
+<Tabs>
+  <Tab title="Full Payment">
+    ```typescript
+    await api.invoices.recordPayment({
+      invoice_id: "inv_abc123",
+      amount: "548.90",
+      payment_method: "stripe",
+      transaction_id: "ch_xyz789",
+      paid_at: "2024-02-15T10:30:00Z"
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Partial Payment">
+    ```typescript
+    // Record first partial payment
+    await api.invoices.recordPayment({
+      invoice_id: "inv_abc123",
+      amount: "300.00",
+      payment_method: "bank_transfer",
+      paid_at: "2024-02-10T14:20:00Z"
+    });
+    
+    // Record remaining balance
+    await api.invoices.recordPayment({
+      invoice_id: "inv_abc123",
+      amount: "248.90",
+      payment_method: "bank_transfer",
+      paid_at: "2024-02-20T09:15:00Z"
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### Payment Methods
+
+Support for multiple payment methods:
+- **Credit card** (via Stripe)
+- **Bank transfer**
+- **Check**
+- **Cash**
+- **Other** custom methods
+
+## Invoice Corrections
+
+### Void Invoice
+Cancel an invoice that was issued incorrectly:
+- Invoice marked as void
+- No payment expected
+- Cannot be un-voided
+
+### Credit Notes
+Issue refunds or corrections:
+- Full or partial credit
+- Applied to future invoices
+- Maintains audit trail
+
+### Delete Draft
+Remove draft invoices before finalization:
+- Only allowed in draft status
+- Permanent deletion
+
+## PDF Generation
+
+Automatically generated PDF invoices with:
+- Company branding and logo
+- Detailed line items
+- Tax breakdown
+- Payment instructions
+- Custom footer text
+
+<Info>
+PDFs are generated on finalization and cached for fast access. Customize the template to match your branding.
+</Info>
+
+## Common Workflows
+
+<AccordionGroup>
+  <Accordion title="Subscription Billing">
+    **End of billing period**:
+    1. Meteroid aggregates subscription charges
+    2. Usage data is calculated from metered events
+    3. Draft invoice created with all line items
+    4. Invoice auto-finalizes based on settings
+    5. PDF generated and sent to customer
+    6. Payment collected via configured method
+  </Accordion>
+  
+  <Accordion title="One-time Service">
+    **Custom implementation**:
+    1. Create manual invoice
+    2. Add line items for services rendered
+    3. Set due date and payment terms
+    4. Finalize and send to customer
+    5. Record payment when received
+  </Accordion>
+  
+  <Accordion title="Proration After Upgrade">
+    **Mid-cycle plan change**:
+    1. Customer upgrades on day 15 of 30-day cycle
+    2. Credit issued for unused 15 days of old plan
+    3. Charge applied for 15 days of new plan
+    4. Both appear as line items on next invoice
+    5. Net amount calculated automatically
+  </Accordion>
+  
+  <Accordion title="Failed Payment Retry">
+    **Payment retry flow**:
+    1. Invoice finalized and payment attempted
+    2. Payment fails (declined card, insufficient funds)
+    3. Retry attempts scheduled (day 3, day 7, day 14)
+    4. Customer notified of failure
+    5. If all retries fail, invoice marked as uncollectible
+    6. Subscription may be suspended or canceled
+  </Accordion>
+</AccordionGroup>
+
+## Reporting
+
+Track invoicing metrics:
+- **Invoiced amount**: Total billed
+- **Collected amount**: Total paid
+- **Outstanding**: Unpaid invoices
+- **Overdue**: Past due date
+- **Average days to pay**: Collection time
+
+<CardGroup cols={2}>
+  <Card title="Generate Invoices" icon="file-invoice" href="/guides/generating-invoices">
+    Learn how to work with invoices
+  </Card>
+  <Card title="Invoice Concepts" icon="book" href="/concepts/invoicing">
+    Understand invoice data model
+  </Card>
+</CardGroup>

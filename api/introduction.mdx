@@ -1,0 +1,134 @@
+---
+title: "API Introduction"
+description: "Get started with Meteroid's gRPC and REST APIs"
+---
+
+Meteroid provides two types of APIs to integrate with your application:
+
+## API Types
+
+### gRPC API
+
+The primary API for Meteroid is built on gRPC, offering high performance and type safety. The gRPC API provides access to all Meteroid functionality including:
+
+- Customer management
+- Subscription lifecycle
+- Pricing and plans
+- Invoicing
+- Product catalog
+- Billable metrics
+- API tokens
+
+**Default endpoint:**
+```
+http://localhost:50061
+```
+
+Configure with environment variable:
+```bash
+METEROID_API_LISTEN_ADDRESS=0.0.0.0:50061
+METEROID_API_EXTERNAL_URL=http://127.0.0.1:50061
+```
+
+### REST API
+
+The REST API provides a subset of functionality with a traditional HTTP/JSON interface. It includes:
+
+- Health checks
+- File management
+- Webhook endpoints
+- OAuth integrations
+- Customer portal operations
+
+**Default endpoint:**
+```
+http://localhost:8084
+```
+
+Configure with environment variable:
+```bash
+METEROID_REST_API_LISTEN_ADDRESS=0.0.0.0:8084
+METEROID_REST_API_EXTERNAL_URL=http://127.0.0.1:8084
+```
+
+### Metering API
+
+The Metering API is a separate gRPC service dedicated to high-throughput usage event ingestion:
+
+**Default endpoint:**
+```
+http://localhost:50062
+```
+
+Configure with environment variable:
+```bash
+METERING_API_LISTEN_ADDRESS=0.0.0.0:50062
+METERING_API_EXTERNAL_URL=http://127.0.0.1:50062
+```
+
+## Getting Started
+
+### Prerequisites
+
+Before using the APIs, you'll need:
+
+1. A running Meteroid instance
+2. An API token for authentication (see [Authentication](/api/authentication))
+3. Your organization and tenant IDs
+
+### Making Your First Request
+
+#### Using gRPC
+
+For gRPC requests, you'll need to use a gRPC client library for your language. Here's a conceptual example:
+
+```typescript
+import { createChannel, createClient } from 'nice-grpc';
+
+const channel = createChannel('localhost:50061');
+const client = createClient(CustomersServiceDefinition, channel);
+
+// Add authentication metadata
+const metadata = new Metadata();
+metadata.set('x-api-key', 'your-api-key');
+
+const response = await client.listCustomers({}, { metadata });
+```
+
+#### Using REST API
+
+For REST endpoints, use standard HTTP methods:
+
+```bash
+curl http://localhost:8084/health
+```
+
+### Health Check
+
+Verify your Meteroid instance is running:
+
+```bash
+curl http://localhost:8084/health
+```
+
+Response:
+```
+OK
+```
+
+## API Documentation
+
+- **OpenAPI Documentation**: Available at `/scalar` when the REST API is running
+- **OpenAPI JSON**: Available at `/api-docs/openapi.json`
+- **Protocol Buffers**: Located in the `proto/` directory of the source code
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/api/authentication">
+    Learn how to authenticate API requests
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/api/errors">
+    Understand error responses and codes
+  </Card>
+</CardGroup>

@@ -1,0 +1,296 @@
+---
+title: Customers
+description: Understanding customer entities and lifecycle in Meteroid
+icon: users
+---
+
+## Overview
+
+A **Customer** represents a billable entity in Meteroid—typically a company, organization, or individual that subscribes to your services. Customers are the central entity around which subscriptions, invoices, and usage data revolve.
+
+## Customer Data Model
+
+Based on the proto definition at `modules/meteroid/proto/api/customers/v1/models.proto:39-63`:
+
+```protobuf
+message Customer {
+  string id = 1;
+  string name = 2;
+  optional string billing_email = 3;
+  optional string alias = 4;
+  repeated string invoicing_emails = 6;
+  optional string phone = 7;
+  int64 balance_value_cents = 8;
+  string currency = 9;
+  optional google.protobuf.Timestamp archived_at = 10;
+  optional google.protobuf.Timestamp created_at = 11;
+  optional Address billing_address = 12;
+  optional ShippingAddress shipping_address = 13;
+  string invoicing_entity_id = 14;
+  string local_id = 15;
+  optional string vat_number = 16;
+  optional string current_payment_method_id = 17;
+  repeated CustomerConnection customer_connections = 23;
+  repeated CustomerPaymentMethod payment_methods = 24;
+}
+```
+
+## Core Properties
+
+### Identification
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | UUID | Unique Meteroid identifier |
+| `local_id` | String | Human-readable ID (e.g., `CUST-001`) |
+| `alias` | String | External system identifier or friendly name |
+| `name` | String | Customer's legal or display name |
+
+### Contact Information
+
+```protobuf
+message Address {
+  optional string line1 = 1;
+  optional string line2 = 2;
+  optional string city = 3;
+  optional string country = 4;
+  optional string state = 5;
+  optional string zipCode = 6;
+}
+```
+
+Customers store both billing and shipping addresses:
+- **billing_address**: Used for invoicing and tax calculations
+- **shipping_address**: Can be set to same as billing or different
+- **billing_email**: Primary contact for billing matters
+- **invoicing_emails**: Array of emails to receive invoices (can include multiple recipients)
+
+### Financial Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `currency` | String | Customer's billing currency (USD, EUR, etc.) |
+| `balance_value_cents` | int64 | Current account balance in cents (can be negative for credits) |
+| `invoicing_entity_id` | UUID | Links to the legal entity that issues invoices |
+
+### Tax Configuration
+
+From the database schema at `modules/meteroid/crates/diesel-models/src/schema.rs`:
+
+```rust
+customer (id) {
+    vat_number -> Nullable<Text>,
+    is_tax_exempt -> Bool,
+    is_vat_number_valid -> Bool,
+    custom_taxes -> Nullable<Jsonb>,
+}
+```
+
+- **vat_number**: EU VAT ID or similar tax identifier
+- **is_tax_exempt**: Whether customer is exempt from taxes
+- **is_vat_number_valid**: Validation status of VAT number
+- **custom_taxes**: Override default tax rates with custom rules
+
+## Payment Methods
+
+Customers can have multiple payment methods at `modules/meteroid/proto/api/customers/v1/models.proto:106-128`:
+
+```protobuf
+message CustomerPaymentMethod {
+  string id = 1;
+  string customer_id = 2;
+  string connection_id = 3;
+  string external_payment_method = 4;
+  PaymentMethodTypeEnum payment_method_type = 8;
+  optional string card_brand = 9;
+  optional string card_last4 = 10;
+  optional int32 card_exp_month = 11;
+  optional int32 card_exp_year = 12;
+  optional string account_number_hint = 13;
+
+  enum PaymentMethodTypeEnum {
+    CARD = 0;
+    TRANSFER = 1;
+    DIRECT_DEBIT_SEPA = 2;
+    DIRECT_DEBIT_ACH = 3;
+    DIRECT_DEBIT_BACS = 4;
+    OTHER = 5;
+  }
+}
+```
+
+The `current_payment_method_id` field indicates which payment method is the default for automatic charges.
+
+## External Integrations
+
+Customers can be linked to external systems via `CustomerConnection` at `modules/meteroid/proto/api/customers/v1/models.proto:130-136`:
+
+```protobuf
+message CustomerConnection {
+  string id = 1;
+  string connector_id = 2;
+  string external_customer_id = 3;
+  api.connectors.v1.ConnectorProviderEnum connector_provider = 4;
+  optional string external_company_id = 5;
+}
+```
+
+This enables synchronization with:
+- **Stripe**: For payment processing
+- **Salesforce**: For CRM integration  
+- **QuickBooks**: For accounting sync
+- **Other platforms**: Via custom connectors
+
+## Customer Lifecycle
+
+### 1. Creation
+
+Create a new customer via API at `modules/meteroid/proto/api/customers/v1/models.proto:65-78`:
+
+```protobuf
+message CustomerNew {
+  string name = 2;
+  optional string billing_email = 3;
+  optional string alias = 4;
+  repeated string invoicing_emails = 6;
+  optional string phone = 7;
+  string currency = 9;
+  optional Address billing_address = 12;
+  optional ShippingAddress shipping_address = 13;
+  optional string invoicing_entity_id = 14;
+  optional string vat_number = 16;
+  repeated CustomTaxRate custom_taxes = 17;
+  optional bool is_tax_exempt = 18;
+}
+```
+
+Example:
+
+```bash
+curl -X POST "https://api.meteroid.com/api/v1/customers" \
+  -H "Authorization: Bearer {api_token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Corporation",
+    "billing_email": "billing@acme.com",
+    "currency": "USD",
+    "billing_address": {
+      "line1": "123 Main St",
+      "city": "San Francisco",
+      "state": "CA",
+      "country": "US",
+      "zipCode": "94102"
+    }
+  }'
+```
+
+### 2. Active State
+
+Once created, customers can:
+- Subscribe to pricing plans
+- Generate usage events
+- Receive invoices
+- Make payments
+- Update their information
+
+### 3. Archival
+
+Customers can be archived (soft-deleted) rather than permanently deleted:
+- `archived_at` timestamp is set
+- Customer data is preserved for historical reporting
+- Prevents new subscriptions or charges
+- Existing subscriptions are canceled
+
+## Customer Balance
+
+The `balance_value_cents` field tracks the customer's account balance:
+
+- **Positive balance**: Customer owes money (outstanding invoices)
+- **Negative balance**: Customer has credit (overpayment, refunds, or applied credits)
+- **Zero balance**: No outstanding amounts
+
+Balance is automatically updated when:
+- Invoices are finalized
+- Payments are processed
+- Credits are applied
+- Refunds are issued
+
+## API Operations
+
+### Create Customer
+
+```bash
+POST /api/v1/customers
+```
+
+### Get Customer
+
+```bash
+GET /api/v1/customers/{customer_id}
+```
+
+### Update Customer
+
+```bash
+PATCH /api/v1/customers/{customer_id}
+```
+
+### List Customers
+
+```bash
+GET /api/v1/customers?limit=50&offset=0
+```
+
+### Archive Customer
+
+```bash
+DELETE /api/v1/customers/{customer_id}
+```
+
+## Relationship to Other Entities
+
+Customers are linked to:
+
+- **Tenant**: Every customer belongs to exactly one tenant (data isolation)
+- **Subscriptions**: Customers can have multiple active subscriptions
+- **Invoices**: All invoices are associated with a customer
+- **Usage Events**: Events are tagged with customer identifiers
+- **Invoicing Entity**: Determines which legal entity invoices the customer
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use external aliases for integration">
+    Store your internal CRM or database IDs in the `alias` field for easy cross-referencing between systems.
+  </Accordion>
+  
+  <Accordion title="Validate VAT numbers">
+    For EU customers, validate VAT numbers to ensure correct tax treatment. Meteroid can automatically validate and update `is_vat_number_valid`.
+  </Accordion>
+  
+  <Accordion title="Set currency at creation">
+    Customer currency cannot be changed after creation if invoices exist. Choose carefully based on the customer's location and preferences.
+  </Accordion>
+  
+  <Accordion title="Use multiple invoicing emails">
+    Add accounts payable and finance team members to `invoicing_emails` to ensure invoices reach the right people.
+  </Accordion>
+  
+  <Accordion title="Archive instead of delete">
+    Always archive customers rather than deleting them to preserve historical data and maintain audit trails.
+  </Accordion>
+</AccordionGroup>
+
+## Related Concepts
+
+<CardGroup cols={2}>
+  <Card title="Subscriptions" icon="calendar-check" href="/concepts/subscriptions">
+    Learn how customers subscribe to pricing plans
+  </Card>
+  <Card title="Invoicing" icon="file-invoice-dollar" href="/concepts/invoicing">
+    Understand how customer invoices are generated
+  </Card>
+  <Card title="Metering" icon="gauge" href="/concepts/metering">
+    See how usage is tracked for customers
+  </Card>
+</CardGroup>

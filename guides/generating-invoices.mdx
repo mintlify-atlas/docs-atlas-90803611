@@ -1,0 +1,569 @@
+---
+title: "Generating Invoices"
+description: "Learn how to generate, manage, and finalize customer invoices in Meteroid"
+---
+
+Invoices are automatically generated from subscriptions and can also be created manually. This guide covers the invoice lifecycle from creation to payment.
+
+## Overview
+
+Meteroid generates invoices:
+- **Automatically** from active subscriptions at billing periods
+- **Manually** for one-time charges or custom billing
+- **On-demand** when customers upgrade or add services
+
+Invoices progress through states: Draft → Finalized → Paid/Void
+
+<Steps>
+
+<Step title="Understand automatic invoice generation">
+
+Subscriptions automatically generate invoices at the start of each billing period.
+
+**What's included:**
+- Recurring subscription fees (base plan price)
+- Usage charges from the previous period
+- Slot charges (seats, licenses)
+- Add-on fees
+- Applied coupons and discounts
+- Taxes based on customer location
+- Credits from customer balance
+
+**Invoice timing:**
+- **Monthly subscriptions**: Invoice generated on the billing day anchor each month
+- **Annual subscriptions**: Invoice generated on the anniversary date
+- **Usage components**: Previous period usage included in next invoice
+
+**Example subscription with billing_day_anchor = 1:**
+- March 1: Invoice created for March 1 - March 31 period
+- April 1: Invoice created for April 1 - April 30 period (includes March usage)
+
+</Step>
+
+<Step title="Preview upcoming invoices">
+
+Show customers what they'll be charged before the invoice is generated.
+
+```protobuf
+message GetUpcomingInvoiceRequest {
+  string subscription_id = 1;
+}
+
+message UpcomingInvoice {
+  string currency = 1;
+  string invoice_date = 2;
+  repeated LineItem line_items = 3;
+  repeated CouponLineItem coupon_line_items = 4;
+  repeated TaxBreakdownItem tax_breakdown = 5;
+  int64 subtotal = 6;
+  int64 subtotal_recurring = 7;
+  int64 tax_amount = 8;
+  int64 total = 9;
+  int64 amount_due = 10;
+  int64 applied_credits = 11;
+  string period_start = 13;
+  string period_end = 14;
+  optional string plan_name = 15;
+  int32 net_terms = 17;
+}
+```
+
+**Example Request:**
+
+```json
+{
+  "subscription_id": "sub_01HX..."
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "currency": "USD",
+  "invoice_date": "2024-03-01T00:00:00Z",
+  "line_items": [
+    {
+      "name": "Professional Plan - Base",
+      "quantity": "1",
+      "unit_price": "9900",
+      "total": "9900",
+      "period_start": "2024-03-01T00:00:00Z",
+      "period_end": "2024-04-01T00:00:00Z"
+    },
+    {
+      "name": "User seats (5 seats)",
+      "quantity": "5",
+      "unit_price": "1500",
+      "total": "7500",
+      "period_start": "2024-03-01T00:00:00Z",
+      "period_end": "2024-04-01T00:00:00Z"
+    },
+    {
+      "name": "API calls - February usage",
+      "quantity": "15230",
+      "unit_price": "10",
+      "total": "152300"
+    }
+  ],
+  "subtotal": "169700",
+  "tax_amount": "16970",
+  "total": "186670",
+  "amount_due": "186670",
+  "applied_credits": "0",
+  "period_start": "2024-03-01T00:00:00Z",
+  "period_end": "2024-04-01T00:00:00Z",
+  "plan_name": "Professional Plan",
+  "net_terms": 30
+}
+```
+
+Use this to build customer billing dashboards showing estimated upcoming charges.
+
+</Step>
+
+<Step title="Create manual invoices">
+
+Create one-time invoices outside of subscriptions using the InvoicesService.
+
+```protobuf
+message CreateInvoiceRequest {
+  NewInvoice invoice = 1;
+}
+```
+
+**Example: One-time professional services invoice**
+
+```json
+{
+  "invoice": {
+    "customer_id": "cust_01HX...",
+    "currency": "USD",
+    "line_items": [
+      {
+        "name": "Custom integration development",
+        "quantity": "40",
+        "unit_price": "15000",
+        "description": "40 hours @ $150/hr"
+      },
+      {
+        "name": "Implementation consulting",
+        "quantity": "1",
+        "unit_price": "500000",
+        "description": "Fixed fee implementation package"
+      }
+    ],
+    "memo": "Professional services - Q1 2024",
+    "net_terms": 30,
+    "invoice_date": "2024-02-28T00:00:00Z"
+  }
+}
+```
+
+Manual invoices are created in **draft** status and must be finalized before sending to customers.
+
+</Step>
+
+<Step title="Finalize invoices">
+
+Draft invoices must be finalized before they can be paid or sent to customers.
+
+```protobuf
+message FinalizeInvoiceRequest {
+  string id = 1;
+}
+```
+
+**Example:**
+
+```json
+{
+  "id": "inv_01HX..."
+}
+```
+
+Finalizing an invoice:
+- Locks the line items and amounts
+- Assigns an invoice number
+- Makes it available for payment
+- Triggers invoice.finalized webhooks
+- Can trigger automatic payment attempts if configured
+
+<Warning>
+Finalized invoices cannot be edited. Only void/delete actions are available.
+</Warning>
+
+**Preview before finalizing:**
+
+Generate a PDF preview to review the invoice:
+
+```json
+{
+  "id": "inv_01HX..."
+}
+```
+
+Response contains SVG renderings of each page for preview in your UI.
+
+</Step>
+
+<Step title="Generate and download PDFs">
+
+Request PDF generation for finalized invoices:
+
+```protobuf
+message RequestPdfGenerationRequest {
+  string id = 1;
+}
+```
+
+**Example:**
+
+```json
+{
+  "id": "inv_01HX..."
+}
+```
+
+PDFs are generated asynchronously. Once ready, they're:
+- Stored and accessible via API
+- Attached to invoice.pdf_generated webhooks
+- Available for customer download
+
+</Step>
+
+<Step title="Record payments">
+
+For invoices paid outside Meteroid (bank transfer, check, external processor):
+
+### Mark invoice as paid
+
+```protobuf
+message MarkInvoiceAsPaidRequest {
+  string invoice_id = 1;
+  string total_amount = 2;
+  optional string payment_date = 3;
+  optional string reference = 4;
+}
+```
+
+**Example:**
+
+```json
+{
+  "invoice_id": "inv_01HX...",
+  "total_amount": "186670",
+  "payment_date": "2024-03-15T00:00:00Z",
+  "reference": "Wire transfer - REF#2024-03-15-482"
+}
+```
+
+<Note>
+The `total_amount` must exactly match the invoice's `amount_due` or the request will fail.
+</Note>
+
+### Add partial payment
+
+For partial payments or multiple payment transactions:
+
+```protobuf
+message AddManualPaymentTransactionRequest {
+  string invoice_id = 1;
+  string amount = 2;
+  optional string payment_date = 3;
+  optional string reference = 4;
+}
+```
+
+**Example:**
+
+```json
+{
+  "invoice_id": "inv_01HX...",
+  "amount": "50000",
+  "payment_date": "2024-03-10T00:00:00Z",
+  "reference": "Partial payment 1 of 3"
+}
+```
+
+Partial payments reduce `amount_due` but don't mark the invoice as fully paid until the total is covered.
+
+</Step>
+
+<Step title="Handle invoice corrections">
+
+For incorrect invoices, you have several options:
+
+### Void an invoice
+
+For invoices that should be canceled:
+
+```protobuf
+message VoidInvoiceRequest {
+  string id = 1;
+}
+```
+
+**Example:**
+
+```json
+{
+  "id": "inv_01HX..."
+}
+```
+
+Voided invoices:
+- Cannot be paid
+- Show as void in customer portal
+- Don't count toward revenue
+- Remain in the system for audit purposes
+
+### Delete a draft invoice
+
+For draft invoices that haven't been finalized:
+
+```protobuf
+message DeleteInvoiceRequest {
+  string id = 1;
+}
+```
+
+**Example:**
+
+```json
+{
+  "id": "inv_01HX..."
+}
+```
+
+<Warning>
+Only draft invoices can be deleted. Finalized invoices must be voided.
+</Warning>
+
+### Mark as uncollectible
+
+For invoices that will never be paid:
+
+```protobuf
+message MarkInvoiceAsUncollectibleRequest {
+  string id = 1;
+}
+```
+
+**Example:**
+
+```json
+{
+  "id": "inv_01HX..."
+}
+```
+
+This closes the invoice without payment and marks it for bad debt accounting.
+
+</Step>
+
+<Step title="Refresh invoice data">
+
+For draft invoices, you can refresh the calculated amounts (useful when usage data is updated):
+
+```protobuf
+message RefreshInvoiceDataRequest {
+  string id = 1;
+}
+```
+
+**Example:**
+
+```json
+{
+  "id": "inv_01HX..."
+}
+```
+
+This recalculates:
+- Usage-based charges
+- Prorations
+- Tax amounts
+- Applied credits
+- Final totals
+
+</Step>
+
+</Steps>
+
+## Invoice statuses
+
+Invoices progress through these states:
+
+- `DRAFT` - Created but not finalized, can be edited
+- `FINALIZED` - Locked and ready for payment
+- `PAID` - Fully paid
+- `VOID` - Canceled, no payment expected
+- `UNCOLLECTIBLE` - Written off as bad debt
+
+## Managing invoice lists
+
+Retrieve and filter invoices using ListInvoices:
+
+```protobuf
+message ListInvoicesRequest {
+  enum SortBy {
+    DATE_DESC = 0;
+    DATE_ASC = 1;
+    ID_DESC = 2;
+    ID_ASC = 3;
+    NUMBER_ASC = 4;
+    NUMBER_DESC = 5;
+  }
+  SortBy sort_by = 1;
+  optional string search = 2;
+  Pagination pagination = 3;
+  optional InvoiceStatus status = 4;
+  optional string customer_id = 5;
+  optional string subscription_id = 6;
+}
+```
+
+**Example: List all unpaid invoices for a customer**
+
+```json
+{
+  "customer_id": "cust_01HX...",
+  "status": "FINALIZED",
+  "sort_by": "DATE_DESC",
+  "pagination": {
+    "limit": 50,
+    "offset": 0
+  }
+}
+```
+
+## Understanding line items
+
+Invoice line items include:
+
+- `name` - Description of the charge
+- `quantity` - Number of units
+- `unit_price` - Price per unit (in cents)
+- `total` - Quantity × unit_price
+- `period_start` / `period_end` - For recurring charges
+- `description` - Additional details
+
+### Subscription-generated line items
+
+**Recurring charges:**
+```json
+{
+  "name": "Professional Plan - Base",
+  "quantity": "1",
+  "unit_price": "9900",
+  "total": "9900",
+  "period_start": "2024-03-01T00:00:00Z",
+  "period_end": "2024-04-01T00:00:00Z"
+}
+```
+
+**Usage charges:**
+```json
+{
+  "name": "API calls - February usage",
+  "quantity": "15230",
+  "unit_price": "10",
+  "total": "152300",
+  "description": "15,230 API requests @ $0.10 each"
+}
+```
+
+**Slot upgrades (prorated):**
+```json
+{
+  "name": "Additional seats (prorated)",
+  "quantity": "3",
+  "unit_price": "750",
+  "total": "2250",
+  "description": "3 seats × $15/seat × 15 days remaining",
+  "period_start": "2024-02-15T00:00:00Z",
+  "period_end": "2024-03-01T00:00:00Z"
+}
+```
+
+## Payment integrations
+
+Meteroid supports multiple payment flows:
+
+### Automatic payment collection
+
+For subscriptions with `charge_automatically: true`, Meteroid will:
+1. Generate invoice at billing period start
+2. Automatically attempt payment with saved payment method
+3. Retry failed payments according to retry schedule
+4. Send customer notifications for payment status
+
+### Customer portal payments
+
+Generate a secure payment token for customer-facing checkout:
+
+```protobuf
+message GenerateInvoicePaymentTokenRequest {
+  string invoice_id = 1;
+}
+```
+
+**Example:**
+
+```json
+{
+  "invoice_id": "inv_01HX..."
+}
+```
+
+Use the returned token to redirect customers to a payment page where they can pay the invoice.
+
+### Manual payment tracking
+
+Use `AddManualPaymentTransaction` or `MarkInvoiceAsPaid` for payments processed outside Meteroid.
+
+## Best practices
+
+<AccordionGroup>
+
+<Accordion title="Preview before finalizing">
+Always generate a preview (PDF or data) and review before finalizing invoices, especially manual ones.
+</Accordion>
+
+<Accordion title="Use appropriate net terms">
+B2B SaaS: 30 days is standard. Enterprise: 60-90 days may be required. Consumer: 0 days (immediate).
+</Accordion>
+
+<Accordion title="Keep customers informed">
+Send invoice notifications when finalized and payment reminders before due date. Use upcoming invoice previews proactively.
+</Accordion>
+
+<Accordion title="Handle payment failures gracefully">
+Implement retry logic with clear customer communication. Offer multiple payment methods as fallbacks.
+</Accordion>
+
+<Accordion title="Void instead of delete">
+For audit compliance, void incorrect finalized invoices rather than deleting. Issue corrected invoice separately.
+</Accordion>
+
+<Accordion title="Track payment references">
+Always include reference numbers for manual payments. This helps with reconciliation and dispute resolution.
+</Accordion>
+
+<Accordion title="Refresh draft invoices before finalizing">
+If there's a delay between draft creation and finalization, refresh to capture latest usage data.
+</Accordion>
+
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Managing Subscriptions" icon="repeat" href="/guides/managing-subscriptions">
+    Understand how subscriptions generate invoices
+  </Card>
+  <Card title="Tracking Usage" icon="chart-line" href="/guides/tracking-usage">
+    Learn how usage data flows into invoices
+  </Card>
+</CardGroup>

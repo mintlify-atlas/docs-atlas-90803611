@@ -1,0 +1,590 @@
+---
+title: Invoicing
+description: Understanding invoice generation and lifecycle in Meteroid
+icon: file-invoice-dollar
+---
+
+## Overview
+
+**Invoicing** is the process of converting subscriptions and usage data into billable invoices. Meteroid automatically generates invoices based on billing cycles, aggregates usage from metering, applies pricing rules, calculates taxes, and produces finalized invoices ready for payment collection.
+
+## Invoice Data Model
+
+Based on the proto definition at `modules/meteroid/proto/api/invoices/v1/models.proto:23-36`:
+
+```protobuf
+message Invoice {
+  string id = 1;
+  string invoice_number = 2;           // Sequential invoice number
+  InvoiceStatus status = 3;
+  string invoice_date = 4;
+  string customer_id = 5;
+  string customer_name = 6;
+  optional string subscription_id = 7; // Null for one-off invoices
+  string currency = 8;
+  optional string due_at = 9;          // Payment due date
+  int64 total = 10;                    // Total amount in cents
+  InvoicePaymentStatus payment_status = 11;
+  bool manual = 12;                    // Manually created vs auto-generated
+}
+```
+
+## Invoice Status
+
+Invoices progress through lifecycle states at `modules/meteroid/proto/api/invoices/v1/models.proto:8-14`:
+
+```protobuf
+enum InvoiceStatus {
+  DRAFT = 0;          // Being prepared, can be edited
+  FINALIZED = 1;      // Locked and issued to customer
+  UNCOLLECTIBLE = 2;  // Marked as bad debt
+  VOID = 3;           // Canceled/voided
+}
+```
+
+### Payment Status
+
+Separate from invoice status, tracks payment collection at `modules/meteroid/proto/api/invoices/v1/models.proto:16-21`:
+
+```protobuf
+enum InvoicePaymentStatus {
+  UNPAID = 0;          // No payment received
+  PARTIALLY_PAID = 1;  // Partial payment received
+  PAID = 2;            // Fully paid
+  ERRORED = 3;         // Payment attempt failed
+}
+```
+
+### Status Flow
+
+```
+DRAFT → FINALIZED → (payment collected) → PAID
+  ↓         ↓
+VOID   UNCOLLECTIBLE
+```
+
+## Invoice Types
+
+At `modules/meteroid/proto/api/invoices/v1/models.proto:170-175`:
+
+```protobuf
+enum InvoiceType {
+  RECURRING = 0;       // Regular subscription billing cycle
+  ONE_OFF = 1;         // Manual or ad-hoc invoice
+  ADJUSTMENT = 2;      // Corrections or adjustments
+  USAGE_THRESHOLD = 3; // Triggered by usage threshold
+}
+```
+
+## Detailed Invoice Structure
+
+Full invoice details at `modules/meteroid/proto/api/invoices/v1/models.proto:54-98`:
+
+```protobuf
+message DetailedInvoice {
+  string id = 1;
+  InvoiceStatus status = 2;
+  string created_at = 4;
+  optional string updated_at = 5;
+  string tenant_id = 6;
+  string customer_id = 7;
+  optional string subscription_id = 8;
+  string currency = 9;
+  string invoice_number = 11;
+  repeated LineItem line_items = 13;
+  repeated CouponLineItem coupon_line_items = 15;
+  string invoice_date = 19;
+  optional string plan_version_id = 20;
+  InvoiceType invoice_type = 21;
+  optional string finalized_at = 22;
+  
+  // Financial totals (all in cents)
+  int64 subtotal = 23;              // Before tax and discounts
+  int64 subtotal_recurring = 24;    // Only recurring charges
+  repeated TaxBreakdownItem tax_breakdown = 25;
+  int64 tax_amount = 26;            // Total tax
+  int64 total = 27;                 // Grand total
+  int64 amount_due = 28;            // Total minus credits/payments
+  int64 applied_credits = 36;       // Customer credits applied
+  int64 discount = 48;              // Total discounts
+  
+  int32 net_terms = 29;             // Payment terms (days)
+  optional string due_at = 33;      // Calculated from invoice_date + net_terms
+  optional string reference = 30;   // Custom reference number
+  optional string memo = 31;        // Note displayed on invoice
+  optional string purchase_order = 45;
+  
+  InlineCustomer customer_details = 35;  // Snapshot of customer at invoice time
+  repeated Transaction transactions = 42;
+  optional string paid_at = 43;
+  bool manual = 44;
+}
+```
+
+## Line Items
+
+Invoices are composed of line items representing individual charges at `modules/meteroid/proto/api/invoices/v1/models.proto:112-135`:
+
+```protobuf
+message LineItem {
+  string id = 1;
+  string name = 2;
+  int64 subtotal = 3;                          // Line total in cents
+  string tax_rate = 4;                         // Tax rate (e.g., "0.20" for 20%)
+  optional string unit_price = 5;              // Per-unit price
+  string start_date = 8;                       // Service period start
+  string end_date = 9;                         // Service period end
+  optional string quantity = 10;               // Quantity or usage amount
+  repeated SubLineItem sub_line_items = 11;    // Detailed breakdowns
+  bool is_prorated = 12;                       // Whether prorated
+  
+  // References back to source entities
+  optional string price_component_id = 13;
+  optional string product_id = 14;
+  optional string metric_id = 15;
+  optional string description = 16;
+  map<string, string> group_by_dimensions = 17; // Segmentation dimensions
+}
+```
+
+### Sub-Line Items
+
+Detailed breakdowns for complex pricing models at `modules/meteroid/proto/api/invoices/v1/models.proto:137-168`:
+
+```protobuf
+message SubLineItem {
+  string id = 1;
+  string name = 2;
+  int64 total = 3;           // Sub-total in cents
+  string quantity = 4;       // Quantity for this tier/segment
+  string unit_price = 5;     // Price for this tier/segment
+
+  oneof subline_attributes {
+    TieredOrVolume tiered = 6;   // For tiered pricing tiers
+    TieredOrVolume volume = 7;   // For volume pricing ranges
+    Matrix matrix = 8;           // For matrix pricing cells
+    Package package = 9;         // For package pricing bundles
+  }
+}
+```
+
+#### Tiered Pricing Sub-Lines
+
+Example: 15,000 API calls with tiered pricing:
+
+```
+Main Line Item: API Calls
+  Subtotal: $1,070.00
+  
+  Sub-Line Items:
+  1. Tier 1 (0-1,000)
+     - Quantity: 1,000
+     - Unit Price: $0.10
+     - Total: $100.00
+  
+  2. Tier 2 (1,001-10,000)
+     - Quantity: 9,000
+     - Unit Price: $0.08
+     - Total: $720.00
+  
+  3. Tier 3 (10,001+)
+     - Quantity: 5,000
+     - Unit Price: $0.05
+     - Total: $250.00
+```
+
+#### Matrix Pricing Sub-Lines
+
+Example: Compute hours by instance type and region:
+
+```
+Main Line Item: Compute Hours
+  Subtotal: $450.00
+  
+  Sub-Line Items:
+  1. small × us-east-1
+     - Quantity: 100 hours
+     - Unit Price: $0.10/hour
+     - Total: $10.00
+  
+  2. medium × us-east-1
+     - Quantity: 50 hours
+     - Unit Price: $0.20/hour
+     - Total: $10.00
+  
+  3. large × eu-west-1
+     - Quantity: 100 hours
+     - Unit Price: $0.45/hour
+     - Total: $45.00
+```
+
+## Tax Calculation
+
+Tax breakdown shows applied tax rates at `modules/meteroid/proto/api/invoices/v1/models.proto:100-104`:
+
+```protobuf
+message TaxBreakdownItem {
+  string name = 1;       // Tax name (e.g., "Sales Tax", "VAT")
+  string tax_rate = 2;   // Rate (e.g., "0.20" for 20%)
+  int64 amount = 3;      // Tax amount in cents
+}
+```
+
+Example invoice with multiple tax rates:
+
+```
+Subtotal:           $1,000.00
+
+Tax Breakdown:
+  State Sales Tax (7.5%):   $75.00
+  Local Tax (2.5%):         $25.00
+  Total Tax:               $100.00
+
+Total:              $1,100.00
+```
+
+## Customer Snapshot
+
+Invoices store a snapshot of customer data at invoice time at `modules/meteroid/proto/api/invoices/v1/models.proto:45-52`:
+
+```protobuf
+message InlineCustomer {
+  string id = 1;
+  string name = 2;
+  api.customers.v1.Address billing_address = 3;
+  string snapshot_at = 4;
+  optional string vat_number = 5;
+  optional string email = 6;
+}
+```
+
+This ensures invoices remain accurate even if customer details change later.
+
+## Invoice Generation Process
+
+Meteroid automatically generates invoices through this process:
+
+### 1. Trigger
+
+Invoices are generated when:
+- **Billing cycle end**: Subscription reaches end of current period
+- **Usage threshold**: Usage crosses configured threshold
+- **Manual creation**: User creates one-off invoice
+- **Immediate charges**: One-time fees or setup charges
+
+### 2. Draft Creation
+
+System creates invoice in `DRAFT` status:
+- Pulls subscription details and active components
+- Queries metering for usage data in the billing period
+- Calculates line items based on pricing models
+- Applies proration for mid-cycle changes
+
+### 3. Usage Aggregation
+
+For usage-based components:
+- Queries ClickHouse for events in date range
+- Applies billable metric aggregation (SUM, COUNT, etc.)
+- Groups by segmentation dimensions if configured
+- Applies unit conversions and rounding
+
+### 4. Price Calculation
+
+For each component:
+- **Rate fees**: Fixed amount × quantity
+- **Usage fees**: Usage × pricing model (tiered, volume, etc.)
+- **Capacity fees**: Included amount + (overage × rate)
+- **Slot fees**: Active slots × rate
+
+Creates sub-line items for tier breakdowns.
+
+### 5. Tax Calculation
+
+- Determines customer tax location from billing address
+- Applies configured tax rates or integrates with tax service
+- Checks for tax exemptions (B2B VAT, exempt customers)
+- Calculates tax per line item
+
+### 6. Discounts and Credits
+
+- Applies active coupons to eligible line items
+- Applies customer account credits
+- Calculates final `amount_due`
+
+### 7. Finalization
+
+When invoice is finalized:
+- Status changes to `FINALIZED`
+- Invoice number is assigned (sequential per tenant)
+- Invoice is locked (no further edits)
+- PDF is generated
+- Customer is notified (email)
+- `finalized_at` timestamp is set
+
+### 8. Payment Collection
+
+Based on subscription configuration:
+- **Auto-charge**: Attempt payment via stored payment method
+- **Send invoice**: Email invoice with payment link
+- **Bank transfer**: Display payment instructions
+
+Updates `payment_status` as payments are received.
+
+## Payment Transactions
+
+Payments are tracked via transactions at `modules/meteroid/proto/api/invoices/v1/models.proto:178-203`:
+
+```protobuf
+message Transaction {
+  string id = 1;
+  optional string provider_transaction_id = 2;  // External payment ID
+  optional string payment_method_id = 3;
+  uint64 amount = 4;                            // Amount in cents
+  string currency = 5;
+  optional string invoice_id = 6;
+  optional string error = 7;                    // Error message if failed
+  PaymentStatusEnum status = 8;
+  PaymentTypeEnum payment_type = 9;
+  optional string processed_at = 10;
+  optional PaymentMethodInfo payment_method_info = 11;
+
+  enum PaymentStatusEnum {
+    READY = 0;      // Created, awaiting processing
+    PENDING = 1;    // Processing
+    SETTLED = 2;    // Successfully completed
+    CANCELLED = 3;  // Canceled
+    FAILED = 4;     // Failed
+  }
+
+  enum PaymentTypeEnum {
+    PAYMENT = 0;    // Payment (credits invoice)
+    REFUND = 1;     // Refund (debits invoice)
+  }
+}
+```
+
+Example invoice with transactions:
+
+```
+Invoice #INV-00123
+Total: $1,000.00
+
+Transactions:
+1. Payment via Stripe (Card ending 4242)
+   - Amount: $700.00
+   - Status: SETTLED
+   - Date: 2024-03-15
+
+2. Payment via Bank Transfer
+   - Amount: $300.00
+   - Status: SETTLED
+   - Date: 2024-03-20
+
+Amount Due: $0.00
+Payment Status: PAID
+```
+
+## Manual Invoices
+
+Create one-off invoices manually via API at `modules/meteroid/proto/api/invoices/v1/models.proto:230-241`:
+
+```protobuf
+message NewInvoice {
+  string customer_id = 1;
+  string invoice_date = 2;
+  optional string due_date = 3;
+  string currency = 4;
+  optional string purchase_order = 5;
+  repeated NewInvoiceLineItem line_items = 6;
+  optional string discount = 7;
+  optional InlineCustomerOverride customer_details = 8;
+  optional string memo = 9;
+  optional string reference = 10;
+}
+```
+
+Example API call:
+
+```bash
+curl -X POST "https://api.meteroid.com/api/v1/invoices" \
+  -H "Authorization: Bearer {api_token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "550e8400-e29b-41d4-a716-446655440000",
+    "invoice_date": "2024-03-15",
+    "due_date": "2024-04-14",
+    "currency": "USD",
+    "memo": "Custom services rendered",
+    "line_items": [
+      {
+        "product": "Consulting Services",
+        "start_date": "2024-03-01",
+        "end_date": "2024-03-31",
+        "quantity": "40",
+        "unit_price": "150.00",
+        "tax_rate": "0.10",
+        "description": "40 hours of consulting at $150/hour"
+      }
+    ]
+  }'
+```
+
+## Invoice Updates
+
+Draft invoices can be edited at `modules/meteroid/proto/api/invoices/v1/models.proto:276-291`:
+
+```protobuf
+message UpdateInvoiceRequest {
+  string id = 1;
+  optional string memo = 2;
+  optional string reference = 3;
+  optional string purchase_order = 4;
+  optional string due_date = 5;
+  optional UpdatedLineItems line_items = 6;    // Add, remove, or modify
+  optional string discount = 7;
+  optional UpdateInlineCustomer customer_details = 8;
+  optional string invoicing_entity_id = 9;
+}
+```
+
+<Warning>
+  Only `DRAFT` invoices can be edited. Once finalized, invoices are immutable. Use credit notes for adjustments.
+</Warning>
+
+## Credit Notes
+
+For corrections after finalization, create credit notes (separate from invoices but related concept).
+
+## Invoice Documents
+
+Finalized invoices generate documents:
+
+- **PDF**: For customer viewing and printing
+- **XML**: For e-invoicing standards (UBL, Factur-X, etc.)
+
+Stored references:
+```protobuf
+optional string pdf_document_id = 38;
+optional string xml_document_id = 39;
+```
+
+## Database Schema
+
+From the schema at `modules/meteroid/crates/diesel-models/src/schema.rs:520-564`:
+
+```rust
+invoice (id) {
+    id -> Uuid,
+    status -> InvoiceStatusEnum,
+    created_at -> Timestamptz,
+    tenant_id -> Uuid,
+    customer_id -> Uuid,
+    subscription_id -> Nullable<Uuid>,
+    currency -> Text,
+    line_items -> Jsonb,              // Stored as JSON
+    invoice_date -> Date,
+    total -> Int8,                    // In cents
+    invoice_type -> InvoiceType,
+    finalized_at -> Nullable<Timestamp>,
+    net_terms -> Int4,
+    invoice_number -> Text,
+    tax_amount -> Int8,
+    subtotal_recurring -> Int8,
+    subtotal -> Int8,
+    amount_due -> Int8,
+    applied_credits -> Int8,
+    payment_status -> InvoicePaymentStatus,
+    paid_at -> Nullable<Timestamptz>,
+    manual -> Bool,
+    discount -> Int8,
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Review drafts before finalizing">
+    Always review automatically generated draft invoices before finalization, especially during the first few billing cycles.
+  </Accordion>
+  
+  <Accordion title="Set appropriate net_terms">
+    B2B invoices typically use 30-day terms. B2C should use shorter terms (0-7 days) or require upfront payment.
+  </Accordion>
+  
+  <Accordion title="Use invoice memo for clarity">
+    Add helpful context in the memo field: billing period, special terms, or payment instructions.
+  </Accordion>
+  
+  <Accordion title="Configure invoice numbering">
+    Set up meaningful invoice number patterns per invoicing entity (e.g., `INV-2024-0001`).
+  </Accordion>
+  
+  <Accordion title="Monitor payment status">
+    Set up alerts for unpaid invoices approaching or passing due dates. Implement dunning workflows.
+  </Accordion>
+  
+  <Accordion title="Use credit notes for adjustments">
+    Never delete or void finalized invoices. Use credit notes to document corrections and maintain audit trails.
+  </Accordion>
+</AccordionGroup>
+
+## API Operations
+
+### List Invoices
+
+```bash
+GET /api/v1/invoices?customer_id={id}&status=FINALIZED
+```
+
+### Get Invoice Details
+
+```bash
+GET /api/v1/invoices/{invoice_id}
+```
+
+### Create Manual Invoice
+
+```bash
+POST /api/v1/invoices
+```
+
+### Update Draft Invoice
+
+```bash
+PATCH /api/v1/invoices/{invoice_id}
+```
+
+### Finalize Invoice
+
+```bash
+POST /api/v1/invoices/{invoice_id}/finalize
+```
+
+### Void Invoice
+
+```bash
+POST /api/v1/invoices/{invoice_id}/void
+```
+
+### Download PDF
+
+```bash
+GET /api/v1/invoices/{invoice_id}/pdf
+```
+
+## Related Concepts
+
+<CardGroup cols={2}>
+  <Card title="Subscriptions" icon="calendar-check" href="/concepts/subscriptions">
+    Learn how subscriptions generate invoices
+  </Card>
+  <Card title="Metering" icon="gauge" href="/concepts/metering">
+    Understand how usage data flows into invoices
+  </Card>
+  <Card title="Pricing Plans" icon="tags" href="/concepts/pricing-plans">
+    See how pricing models determine invoice amounts
+  </Card>
+  <Card title="Customers" icon="users" href="/concepts/customers">
+    Understand customer billing configuration
+  </Card>
+</CardGroup>

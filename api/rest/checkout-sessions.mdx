@@ -1,0 +1,279 @@
+---
+title: "Checkout Sessions"
+description: "Manage checkout sessions for subscription sign-ups"
+---
+
+Checkout sessions facilitate customer subscription creation with payment collection and configuration.
+
+## List Checkout Sessions
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/checkout-sessions" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/checkout-sessions`
+
+Retrieve a list of checkout sessions with optional filtering.
+
+### Query Parameters
+
+<ParamField query="customer_id" type="string">
+  Filter by customer ID
+</ParamField>
+
+<ParamField query="status" type="string">
+  Filter by status. Values: `CREATED`, `AWAITING_PAYMENT`, `COMPLETED`, `EXPIRED`, `CANCELLED`
+</ParamField>
+
+### Response
+
+<ResponseField name="sessions" type="array">
+  Array of checkout session objects
+  
+  <Expandable title="CheckoutSession properties">
+    <ResponseField name="id" type="string" required>
+      Checkout session ID
+    </ResponseField>
+    
+    <ResponseField name="customer_id" type="string" required>
+      Customer ID
+    </ResponseField>
+    
+    <ResponseField name="plan_version_id" type="string" required>
+      Plan version ID
+    </ResponseField>
+    
+    <ResponseField name="status" type="string" required>
+      Session status: `CREATED`, `AWAITING_PAYMENT`, `COMPLETED`, `EXPIRED`, `CANCELLED`
+    </ResponseField>
+    
+    <ResponseField name="checkout_type" type="string" required>
+      Type: `SELF_SERVE` or `SUBSCRIPTION_ACTIVATION`
+    </ResponseField>
+    
+    <ResponseField name="checkout_url" type="string">
+      URL for the checkout page
+    </ResponseField>
+    
+    <ResponseField name="subscription_id" type="string">
+      Created subscription ID (when completed)
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="string" required>
+      Creation timestamp
+    </ResponseField>
+    
+    <ResponseField name="expires_at" type="string">
+      Expiration timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "sessions": [
+    {
+      "id": "che_7n42DGM5Tflk9n8mt7Fhc7",
+      "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+      "plan_version_id": "plv_7n42DGM5Tflk9n8mt7Fhc7",
+      "status": "COMPLETED",
+      "checkout_type": "SELF_SERVE",
+      "subscription_id": "sub_7n42DGM5Tflk9n8mt7Fhc7",
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Create Checkout Session
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://api.meteroid.com/api/v1/checkout-sessions" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+    "plan_version_id": "plv_7n42DGM5Tflk9n8mt7Fhc7",
+    "billing_start_date": "2024-02-01"
+  }'
+```
+</CodeGroup>
+
+**POST** `/api/v1/checkout-sessions`
+
+Create a new checkout session for a customer to subscribe to a plan.
+
+### Request Body
+
+<ParamField body="customer_id" type="string" required>
+  Customer ID or alias
+</ParamField>
+
+<ParamField body="plan_version_id" type="string" required>
+  Plan version ID
+</ParamField>
+
+<ParamField body="billing_start_date" type="string (date)">
+  Billing start date (YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="billing_day_anchor" type="integer">
+  Day of month for billing (1-31)
+</ParamField>
+
+<ParamField body="trial_duration_days" type="integer">
+  Trial period in days
+</ParamField>
+
+<ParamField body="coupon_code" type="string">
+  Coupon code to apply
+</ParamField>
+
+<ParamField body="coupon_ids" type="array">
+  Array of coupon IDs to apply
+</ParamField>
+
+<ParamField body="expires_in_hours" type="integer">
+  Session expiry time in hours. Default is 1 hour for self-serve checkout.
+</ParamField>
+
+<ParamField body="net_terms" type="integer">
+  Payment terms in days
+</ParamField>
+
+<ParamField body="auto_advance_invoices" type="boolean">
+  If false, invoices stay in Draft until manually finalized. Default is true.
+</ParamField>
+
+<ParamField body="charge_automatically" type="boolean">
+  Automatically charge the customer's payment method. Default is true.
+</ParamField>
+
+<ParamField body="components" type="object">
+  Subscription component customizations
+  
+  <Expandable title="properties">
+    <ParamField body="parameterized_components" type="array">
+      Component parameterizations
+    </ParamField>
+    
+    <ParamField body="overridden_components" type="array">
+      Component price overrides
+    </ParamField>
+    
+    <ParamField body="extra_components" type="array">
+      Additional components
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response
+
+<ResponseField name="session" type="object">
+  Created checkout session object
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "session": {
+    "id": "che_7n42DGM5Tflk9n8mt7Fhc7",
+    "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+    "plan_version_id": "plv_7n42DGM5Tflk9n8mt7Fhc7",
+    "status": "CREATED",
+    "checkout_type": "SELF_SERVE",
+    "checkout_url": "https://checkout.meteroid.com/che_7n42DGM5Tflk9n8mt7Fhc7",
+    "expires_at": "2024-01-15T11:30:00Z",
+    "created_at": "2024-01-15T10:30:00Z"
+  }
+}
+```
+</ResponseExample>
+
+## Get Checkout Session
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/checkout-sessions/{id}" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/checkout-sessions/{id}`
+
+Retrieve a checkout session by its ID.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  Checkout session ID
+</ParamField>
+
+### Response
+
+<ResponseField name="session" type="object">
+  Checkout session details
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "session": {
+    "id": "che_7n42DGM5Tflk9n8mt7Fhc7",
+    "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+    "plan_version_id": "plv_7n42DGM5Tflk9n8mt7Fhc7",
+    "status": "COMPLETED",
+    "checkout_type": "SELF_SERVE",
+    "subscription_id": "sub_7n42DGM5Tflk9n8mt7Fhc7",
+    "completed_at": "2024-01-15T10:35:00Z",
+    "created_at": "2024-01-15T10:30:00Z"
+  }
+}
+```
+</ResponseExample>
+
+## Cancel Checkout Session
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://api.meteroid.com/api/v1/checkout-sessions/{id}/cancel" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**POST** `/api/v1/checkout-sessions/{id}/cancel`
+
+Cancel a checkout session.
+
+### Path Parameters
+
+<ParamField path="id" type="string" required>
+  Checkout session ID
+</ParamField>
+
+### Response
+
+<ResponseField name="session" type="object">
+  Updated checkout session with status `CANCELLED`
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "session": {
+    "id": "che_7n42DGM5Tflk9n8mt7Fhc7",
+    "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+    "plan_version_id": "plv_7n42DGM5Tflk9n8mt7Fhc7",
+    "status": "CANCELLED",
+    "checkout_type": "SELF_SERVE",
+    "created_at": "2024-01-15T10:30:00Z"
+  }
+}
+```
+</ResponseExample>

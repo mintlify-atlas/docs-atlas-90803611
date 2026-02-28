@@ -1,0 +1,618 @@
+---
+title: 'Webhook Notifications'
+description: 'Receive real-time notifications for billing events using Svix'
+icon: 'webhook'
+---
+
+Meteroid sends webhook notifications for all billing events, enabling you to integrate with external systems and trigger custom workflows.
+
+## Overview
+
+Webhooks are powered by **Svix**, providing:
+- **Reliable delivery** - Automatic retries with exponential backoff
+- **Signature verification** - HMAC-based payload signing
+- **Event types** - Schema-based event definitions
+- **Portal access** - Self-service webhook management UI
+- **Event logs** - Complete delivery history and debugging
+
+## Configuration
+
+### Environment Variables
+
+Enable webhooks by configuring Svix:
+
+```bash
+# Svix server URL (use Svix cloud or self-hosted)
+SVIX_SERVER_URL=https://api.svix.com
+
+# Svix authentication token
+SVIX_JWT_TOKEN=your_jwt_token
+```
+
+<Info>
+Webhooks are optional. If `SVIX_SERVER_URL` is not configured, webhook processing is skipped.
+</Info>
+
+### Initialization
+
+On startup, Meteroid:
+1. Initializes the Svix client
+2. Imports event type schemas from OpenAPI spec
+3. Configures rate limiting (50 requests/second)
+
+```rust
+// Source: modules/meteroid/src/svix.rs
+
+let svix = Svix::new(
+    token,
+    Some(SvixOptions {
+        debug: true,
+        server_url: Some(url),
+        timeout: Some(Duration::from_secs(30)),
+        num_retries: Some(3),
+        ..Default::default()
+    }),
+);
+```
+
+## Webhook Events
+
+Meteroid sends webhooks for the following event types:
+
+### Customer Events
+
+<CodeGroup>
+```json customer.created
+{
+  "id": "evt_1234567890",
+  "type": "customer.created",
+  "customer_id": "cus_abc123",
+  "name": "Acme Corporation",
+  "alias": "acme",
+  "billing_email": "billing@acme.com",
+  "invoicing_emails": ["ap@acme.com", "finance@acme.com"],
+  "phone": "+1234567890",
+  "currency": "USD",
+  "timestamp": "2024-02-28T10:30:00.000Z"
+}
+```
+</CodeGroup>
+
+**Event Type**: `customer.created`
+
+**Description**: Triggered when a new customer is created in Meteroid.
+
+### Subscription Events
+
+<CodeGroup>
+```json subscription.created
+{
+  "id": "evt_1234567890",
+  "type": "subscription.created",
+  "subscription_id": "sub_abc123",
+  "customer_id": "cus_abc123",
+  "customer_name": "Acme Corporation",
+  "customer_alias": "acme",
+  "plan_name": "Enterprise Plan",
+  "version": 1,
+  "currency": "USD",
+  "billing_day_anchor": 1,
+  "trial_duration": 14,
+  "start_date": "2024-03-01",
+  "billing_start_date": "2024-03-15",
+  "status": "ACTIVE",
+  "period": "MONTHLY",
+  "mrr_cents": 10000,
+  "net_terms": 30,
+  "invoice_threshold": null,
+  "activated_at": "2024-02-28T10:30:00.000Z",
+  "created_at": "2024-02-28T10:30:00.000Z",
+  "timestamp": "2024-02-28T10:30:00.000Z"
+}
+```
+</CodeGroup>
+
+**Event Type**: `subscription.created`
+
+**Description**: Triggered when a new subscription is created.
+
+### Invoice Events
+
+<CodeGroup>
+```json invoice.finalized
+{
+  "id": "evt_1234567890",
+  "type": "invoice.finalized",
+  "invoice_id": "inv_abc123",
+  "customer_id": "cus_abc123",
+  "status": "FINALIZED",
+  "currency": "USD",
+  "total": 10000,
+  "tax_amount": 2000,
+  "created_at": "2024-02-28T10:30:00.000Z",
+  "timestamp": "2024-02-28T10:30:00.000Z"
+}
+```
+
+```json invoice.paid
+{
+  "id": "evt_1234567890",
+  "type": "invoice.paid",
+  "invoice_id": "inv_abc123",
+  "customer_id": "cus_abc123",
+  "status": "PAID",
+  "currency": "USD",
+  "total": 10000,
+  "tax_amount": 2000,
+  "created_at": "2024-02-28T10:30:00.000Z",
+  "timestamp": "2024-02-28T10:30:00.000Z"
+}
+```
+
+```json invoice.voided
+{
+  "id": "evt_1234567890",
+  "type": "invoice.voided",
+  "invoice_id": "inv_abc123",
+  "customer_id": "cus_abc123",
+  "status": "VOIDED",
+  "currency": "USD",
+  "total": 10000,
+  "tax_amount": 2000,
+  "created_at": "2024-02-28T10:30:00.000Z",
+  "timestamp": "2024-02-28T10:30:00.000Z"
+}
+```
+</CodeGroup>
+
+**Event Types**:
+- `invoice.created` - New invoice created
+- `invoice.finalized` - Invoice finalized and ready to send
+- `invoice.paid` - Invoice marked as paid
+- `invoice.voided` - Invoice voided or cancelled
+
+### Metric Events
+
+<CodeGroup>
+```json metric.created
+{
+  "id": "evt_1234567890",
+  "type": "metric.created",
+  "metric_id": "met_abc123",
+  "name": "API Calls",
+  "description": "Number of API requests",
+  "code": "api_calls",
+  "aggregation_type": "COUNT",
+  "aggregation_key": "request_id",
+  "unit_conversion_factor": null,
+  "unit_conversion_rounding": null,
+  "segmentation_matrix": null,
+  "usage_group_key": null,
+  "product_family_id": "fam_abc123",
+  "product_id": "prod_abc123",
+  "created_at": "2024-02-28T10:30:00.000Z",
+  "timestamp": "2024-02-28T10:30:00.000Z"
+}
+```
+</CodeGroup>
+
+**Event Type**: `metric.created`
+
+**Description**: Triggered when a new billable metric is created.
+
+### Quote Events
+
+<CodeGroup>
+```json quote.accepted
+{
+  "id": "evt_1234567890",
+  "type": "quote.accepted",
+  "quote_id": "quo_abc123",
+  "customer_id": "cus_abc123",
+  "timestamp": "2024-02-28T10:30:00.000Z"
+}
+```
+
+```json quote.converted
+{
+  "id": "evt_1234567890",
+  "type": "quote.converted",
+  "quote_id": "quo_abc123",
+  "customer_id": "cus_abc123",
+  "subscription_id": "sub_abc123",
+  "timestamp": "2024-02-28T10:30:00.000Z"
+}
+```
+</CodeGroup>
+
+**Event Types**:
+- `quote.accepted` - Quote accepted by customer
+- `quote.converted` - Quote converted to subscription
+
+### Credit Note Events
+
+<CodeGroup>
+```json credit_note.finalized
+{
+  "id": "evt_1234567890",
+  "type": "credit_note.finalized",
+  "credit_note_id": "cn_abc123",
+  "customer_id": "cus_abc123",
+  "invoice_id": "inv_abc123",
+  "status": "FINALIZED",
+  "currency": "USD",
+  "total": 5000,
+  "tax_amount": 1000,
+  "refunded_amount_cents": 3000,
+  "credited_amount_cents": 2000,
+  "created_at": "2024-02-28T10:30:00.000Z",
+  "timestamp": "2024-02-28T10:30:00.000Z"
+}
+```
+</CodeGroup>
+
+**Event Types**:
+- `credit_note.created` - New credit note created
+- `credit_note.finalized` - Credit note finalized
+- `credit_note.voided` - Credit note voided
+
+## Receiving Webhooks
+
+### Create Endpoint
+
+Create an HTTPS endpoint to receive webhooks:
+
+```typescript
+import { Webhook } from 'svix';
+
+app.post('/webhooks/meteroid', async (req, res) => {
+  const webhookSecret = process.env.METEROID_WEBHOOK_SECRET;
+  const payload = req.body;
+  const headers = req.headers;
+  
+  try {
+    // Verify signature
+    const wh = new Webhook(webhookSecret);
+    const event = wh.verify(payload, headers);
+    
+    // Process event
+    switch (event.type) {
+      case 'invoice.finalized':
+        await handleInvoiceFinalized(event);
+        break;
+      case 'subscription.created':
+        await handleSubscriptionCreated(event);
+        break;
+      // Handle other event types...
+    }
+    
+    res.status(200).json({ received: true });
+  } catch (err) {
+    console.error('Webhook verification failed:', err);
+    res.status(400).json({ error: 'Invalid signature' });
+  }
+});
+```
+
+### Verify Signatures
+
+<Warning>
+Always verify webhook signatures to ensure requests are from Meteroid.
+</Warning>
+
+<CodeGroup>
+```typescript Node.js
+import { Webhook } from 'svix';
+
+const webhook = new Webhook(webhookSecret);
+const event = webhook.verify(payload, headers);
+```
+
+```python Python
+from svix.webhooks import Webhook
+
+wh = Webhook(webhook_secret)
+event = wh.verify(payload, headers)
+```
+
+```go Go
+import "github.com/svix/svix-webhooks/go"
+
+wh, _ := svix.NewWebhook(webhookSecret)
+event, _ := wh.Verify(payload, headers)
+```
+
+```rust Rust
+use svix::webhooks::Webhook;
+
+let wh = Webhook::new(&webhook_secret)?;
+let event = wh.verify(payload, headers)?;
+```
+</CodeGroup>
+
+## Webhook Management
+
+### App Portal
+
+Meteroid provides a self-service webhook portal powered by Svix:
+
+```typescript
+import { AppPortal } from 'svix-react';
+import 'svix-react/style.css';
+
+function WebhookSettings() {
+  const [appPortalUrl, setAppPortalUrl] = useState(null);
+  
+  useEffect(() => {
+    // Fetch app portal access token from your backend
+    fetch('/api/webhooks/portal-access')
+      .then(res => res.json())
+      .then(data => setAppPortalUrl(data.url));
+  }, []);
+  
+  return (
+    <AppPortal url={appPortalUrl} />
+  );
+}
+```
+
+**Portal Features**:
+- Add and manage webhook endpoints
+- Configure event type subscriptions
+- View delivery logs and retry failed events
+- Test endpoints with sample payloads
+- Rotate signing secrets
+
+### Generate Portal Access
+
+From your backend, generate a portal access URL:
+
+```rust
+// Source: modules/meteroid/src/svix.rs
+
+let access = svix
+    .app_portal_access(tenant_id)
+    .await?;
+
+let portal_url = access.url;
+```
+
+The portal URL is valid for 7 days by default.
+
+## Event Processing
+
+Meteroid uses a background worker to process outgoing webhooks:
+
+### Outbox Pattern
+
+<Steps>
+  <Step title="Event Created">
+    When a billable event occurs, Meteroid writes it to the outbox table:
+    
+    ```sql
+    INSERT INTO webhook_out_event (
+      event_id,
+      event_type,
+      tenant_id,
+      payload,
+      created_at
+    ) VALUES (...);
+    ```
+  </Step>
+  
+  <Step title="Background Worker">
+    The webhook worker polls the outbox queue:
+    
+    ```rust
+    // Source: modules/meteroid/src/workers/pgmq/webhook_out.rs
+    
+    let processor = WebhookOut::new(svix.clone());
+    processor.process_queue().await;
+    ```
+  </Step>
+  
+  <Step title="Send via Svix">
+    Events are sent to Svix for delivery:
+    
+    ```rust
+    let message = MessageIn::new(
+        event_type.to_string(),
+        serde_json::to_value(&event)?
+    );
+    
+    svix.create_message(tenant_id, message).await?;
+    ```
+  </Step>
+  
+  <Step title="Retry on Failure">
+    Failed deliveries are automatically retried by Svix with exponential backoff.
+  </Step>
+</Steps>
+
+### Error Handling
+
+Webhook errors are handled gracefully:
+
+```rust
+match svix.create_message(tenant_id, message).await {
+    Ok(_) => log::info!("Webhook sent: {}", event_id),
+    Err(svix::error::Error::Http(e)) => {
+        match e.status().as_u16() {
+            404 => {
+                // No webhook endpoints configured for this tenant
+                log::info!("Skipped webhook for unconfigured tenant");
+            },
+            409 => {
+                // Event already sent (idempotent)
+                log::info!("Webhook already delivered");
+            },
+            _ => return Err(e)
+        }
+    }
+}
+```
+
+## Rate Limiting
+
+Webhook delivery is rate-limited to 50 requests/second:
+
+```rust
+// Source: modules/meteroid/src/svix.rs
+
+let rate_limiter = RateLimiter::direct(
+    Quota::per_second(nonzero!(50u32))
+);
+
+rate_limiter
+    .until_ready_with_jitter(Jitter::up_to(Duration::from_secs(1)))
+    .await;
+```
+
+This protects both Meteroid and Svix from overload.
+
+## Event Schema
+
+All events follow a consistent schema:
+
+```typescript
+interface WebhookEvent {
+  id: string;              // Unique event ID
+  type: string;            // Event type (e.g., "invoice.finalized")
+  timestamp: string;       // ISO 8601 timestamp
+  [key: string]: any;      // Event-specific data
+}
+```
+
+### Schema Validation
+
+Meteroid automatically imports event schemas from its OpenAPI specification:
+
+```rust
+svix.import_open_api_event_types(
+    include_str!("../../../../spec/api/v1/openapi.json")
+).await?;
+```
+
+This ensures webhook payloads match documented schemas.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Return 200 Quickly">
+    Process webhooks asynchronously:
+    
+    ```typescript
+    app.post('/webhooks', async (req, res) => {
+      // Verify and acknowledge immediately
+      const event = verifyWebhook(req);
+      res.status(200).json({ received: true });
+      
+      // Process in background
+      await queue.add('process-webhook', event);
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Implement Idempotency">
+    Store processed event IDs to avoid duplicate processing:
+    
+    ```typescript
+    if (await isEventProcessed(event.id)) {
+      return;
+    }
+    
+    await processEvent(event);
+    await markEventProcessed(event.id);
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Retries Gracefully">
+    Svix will retry failed deliveries. Ensure your handlers are idempotent and can safely process the same event multiple times.
+  </Accordion>
+  
+  <Accordion title="Monitor Delivery Health">
+    Use the Svix portal to monitor:
+    - Delivery success rate
+    - Failed events requiring attention
+    - Endpoint response times
+  </Accordion>
+  
+  <Accordion title="Use Event Filtering">
+    Subscribe only to events you need:
+    
+    ```typescript
+    const relevantEvents = [
+      'invoice.finalized',
+      'subscription.created'
+    ];
+    
+    if (!relevantEvents.includes(event.type)) {
+      return;
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Webhooks Not Delivered
+
+<Steps>
+  <Step title="Check Configuration">
+    Verify Svix is enabled:
+    ```bash
+    echo $SVIX_SERVER_URL
+    echo $SVIX_JWT_TOKEN
+    ```
+  </Step>
+  
+  <Step title="Verify Endpoint">
+    Ensure your webhook endpoint:
+    - Is publicly accessible (HTTPS)
+    - Returns 200 status code
+    - Responds within 15 seconds
+  </Step>
+  
+  <Step title="Check Portal Logs">
+    Use the Svix portal to view delivery attempts and error messages.
+  </Step>
+  
+  <Step title="Test Endpoint">
+    Send a test webhook from the portal to verify your endpoint works.
+  </Step>
+</Steps>
+
+### Signature Verification Failed
+
+<Warning>
+Signature mismatches are usually caused by:
+- Incorrect webhook secret
+- Modified payload (middleware, proxies)
+- Clock skew between servers
+</Warning>
+
+Debug steps:
+1. Verify you're using the correct signing secret
+2. Log the raw request body before parsing
+3. Check for middleware that modifies requests
+4. Ensure system clock is synchronized
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Event Types Reference" icon="list" href="/api-reference/webhooks">
+    Complete event type documentation
+  </Card>
+  
+  <Card title="Svix Documentation" icon="book" href="https://docs.svix.com">
+    Official Svix webhook docs
+  </Card>
+  
+  <Card title="Stripe Integration" icon="stripe" href="/integrations/stripe">
+    Receive Stripe webhooks
+  </Card>
+  
+  <Card title="Developer Portal" icon="code" href="/development">
+    Local development setup
+  </Card>
+</CardGroup>

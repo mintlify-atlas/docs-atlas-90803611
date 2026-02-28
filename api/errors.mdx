@@ -1,0 +1,470 @@
+---
+title: "Error Handling"
+description: "Understand error responses and troubleshoot API issues"
+---
+
+Meteroid APIs use standard gRPC status codes and REST HTTP status codes to indicate the success or failure of requests.
+
+## Error Response Format
+
+### gRPC Errors
+
+gRPC errors follow the standard gRPC status model with additional metadata for debugging:
+
+```json
+{
+  "code": "INVALID_ARGUMENT",
+  "message": "Customer ID is required",
+  "details": [
+    {
+      "@type": "type.googleapis.com/meteroid.ErrorDetails",
+      "source": "validation error",
+      "location": "src/services/customers.rs:123:45"
+    }
+  ]
+}
+```
+
+### REST API Errors
+
+REST API errors return JSON responses with a consistent structure:
+
+```json
+{
+  "code": "BAD_REQUEST",
+  "message": "Invalid input: Customer name cannot be empty"
+}
+```
+
+## Error Codes
+
+### gRPC Status Codes
+
+Meteroid uses standard gRPC status codes:
+
+| Code | HTTP Equivalent | Description |
+|------|----------------|-------------|
+| `OK` | 200 | Success |
+| `CANCELLED` | 499 | Request cancelled by client |
+| `UNKNOWN` | 500 | Unknown error |
+| `INVALID_ARGUMENT` | 400 | Invalid request parameters |
+| `DEADLINE_EXCEEDED` | 504 | Request timeout |
+| `NOT_FOUND` | 404 | Resource not found |
+| `ALREADY_EXISTS` | 409 | Resource already exists |
+| `PERMISSION_DENIED` | 403 | Insufficient permissions |
+| `UNAUTHENTICATED` | 401 | Missing or invalid authentication |
+| `RESOURCE_EXHAUSTED` | 429 | Rate limit exceeded |
+| `FAILED_PRECONDITION` | 400 | Precondition failed |
+| `ABORTED` | 409 | Operation aborted |
+| `OUT_OF_RANGE` | 400 | Value out of range |
+| `UNIMPLEMENTED` | 501 | Not implemented |
+| `INTERNAL` | 500 | Internal server error |
+| `UNAVAILABLE` | 503 | Service unavailable |
+| `DATA_LOSS` | 500 | Data loss or corruption |
+
+### REST API Error Codes
+
+REST API responses include these error codes:
+
+```typescript
+enum ErrorCode {
+  BAD_REQUEST = "BAD_REQUEST",
+  NOT_FOUND = "NOT_FOUND",
+  CONFLICT = "CONFLICT",
+  FORBIDDEN = "FORBIDDEN",
+  UNAUTHORIZED = "UNAUTHORIZED",
+  INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
+}
+```
+
+## Common Error Scenarios
+
+### Authentication Errors
+
+#### Missing Authentication
+
+**gRPC Status:** `UNAUTHENTICATED`
+
+**HTTP Status:** 401
+
+**Message:** `No authentication provided`
+
+**Solution:** Include the `x-api-key` header or `Authorization: Bearer <token>` header
+
+```bash
+# Correct
+curl -H "x-api-key: mtr_v1_..." \
+  http://localhost:50061/api/customers
+```
+
+#### Invalid API Key
+
+**gRPC Status:** `PERMISSION_DENIED`
+
+**HTTP Status:** 403
+
+**Message:** `Invalid API key` or `Unauthorized`
+
+**Causes:**
+- API key is malformed
+- API key has been revoked
+- API key hash doesn't match stored value
+
+**Solution:** Create a new API token
+
+#### Expired JWT
+
+**gRPC Status:** `PERMISSION_DENIED`
+
+**HTTP Status:** 403
+
+**Message:** `JWT expired`
+
+**Solution:** Refresh your authentication token
+
+#### Missing Context
+
+**gRPC Status:** `PERMISSION_DENIED`
+
+**HTTP Status:** 403
+
+**Message:** `Unauthorized. Missing org/tenant context`
+
+**Solution:** Include the `x-md-context` header with organization and tenant IDs
+
+```
+x-md-context: org_<org_id>.tenant_<tenant_id>
+```
+
+### Authorization Errors
+
+#### Forbidden Endpoint
+
+**gRPC Status:** `PERMISSION_DENIED`
+
+**HTTP Status:** 403
+
+**Message:** `Forbidden`
+
+**Cause:** API tokens cannot access certain endpoints (organizations, users, API token management)
+
+**Solution:** Use user JWT authentication for these operations
+
+**Restricted services:**
+- `meteroid.api.organizations.v1.OrganizationsService`
+- `meteroid.api.users.v1.UsersService`
+- `meteroid.api.apitokens.v1.ApiTokensService`
+- `meteroid.api.tenants.v1.TenantsService`
+- `meteroid.api.instance.v1.InstanceService`
+
+### Validation Errors
+
+#### Invalid Argument
+
+**gRPC Status:** `INVALID_ARGUMENT`
+
+**HTTP Status:** 400
+
+**Message:** Describes the validation error
+
+**Common causes:**
+- Missing required fields
+- Invalid field format
+- Value out of acceptable range
+
+**Example:**
+```json
+{
+  "code": "INVALID_ARGUMENT",
+  "message": "Invalid input: Customer name cannot be empty"
+}
+```
+
+### Resource Errors
+
+#### Not Found
+
+**gRPC Status:** `NOT_FOUND`
+
+**HTTP Status:** 404
+
+**Message:** `Resource not found`
+
+**Cause:** The requested resource doesn't exist or you don't have access
+
+#### Already Exists
+
+**gRPC Status:** `ALREADY_EXISTS`
+
+**HTTP Status:** 409
+
+**Message:** `Conflict` or describes the duplicate resource
+
+**Cause:** Attempting to create a resource that already exists
+
+### Idempotency Errors
+
+#### Request In Progress
+
+**gRPC Status:** `ALREADY_EXISTS`
+
+**HTTP Status:** 409
+
+**Message:** `Request already in progress`
+
+**Cause:** A request with the same idempotency key is currently being processed
+
+**Solution:** Wait for the original request to complete
+
+#### Invalid Idempotency Key
+
+**gRPC Status:** `INVALID_ARGUMENT`
+
+**HTTP Status:** 400
+
+**Message:** `Invalid idempotency value length` or `Can't process idempotency header value`
+
+**Cause:** Idempotency key format is invalid
+
+### Server Errors
+
+#### Internal Server Error
+
+**gRPC Status:** `INTERNAL`
+
+**HTTP Status:** 500
+
+**Message:** `Internal server error. Please refer to logs or support.`
+
+**Cause:** Unexpected server error
+
+**Solution:** Check server logs or contact support. The error details are logged server-side.
+
+#### Service Unavailable
+
+**gRPC Status:** `UNAVAILABLE`
+
+**HTTP Status:** 503
+
+**Message:** `Service unavailable` or `NOT_READY`
+
+**Cause:** Service is starting up or temporarily unavailable
+
+**Solution:** Wait and retry the request
+
+## Error Metadata
+
+### Source Details Header
+
+For server-side debugging, Meteroid includes error source details in a binary metadata header:
+
+**Header:** `x-md-source-details-bin`
+
+**Content (decoded):**
+```json
+{
+  "msg": "Error description",
+  "source": "underlying error",
+  "location_file": "src/services/customers.rs",
+  "location_line": 123,
+  "location_column": 45
+}
+```
+
+<Info>
+  Source details are only included when the error has an underlying source. They help with server-side debugging but are not meant for client consumption.
+</Info>
+
+## Error Handling Best Practices
+
+### Retry Logic
+
+<AccordionGroup>
+  <Accordion title="Retryable errors">
+    Implement exponential backoff for:
+    - `UNAVAILABLE` (503)
+    - `DEADLINE_EXCEEDED` (504)
+    - `RESOURCE_EXHAUSTED` (429)
+    - `INTERNAL` (500) - with limited retries
+  </Accordion>
+
+  <Accordion title="Non-retryable errors">
+    Do not retry:
+    - `INVALID_ARGUMENT` (400)
+    - `NOT_FOUND` (404)
+    - `ALREADY_EXISTS` (409)
+    - `PERMISSION_DENIED` (403)
+    - `UNAUTHENTICATED` (401)
+  </Accordion>
+</AccordionGroup>
+
+### Example Retry Implementation
+
+```typescript
+async function callApiWithRetry(
+  apiCall: () => Promise<any>,
+  maxRetries = 3
+) {
+  let lastError;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      lastError = error;
+      
+      // Don't retry client errors
+      if (isClientError(error.code)) {
+        throw error;
+      }
+      
+      // Exponential backoff
+      const delay = Math.min(1000 * Math.pow(2, i), 10000);
+      await sleep(delay);
+    }
+  }
+  
+  throw lastError;
+}
+
+function isClientError(code: string): boolean {
+  return [
+    'INVALID_ARGUMENT',
+    'NOT_FOUND',
+    'ALREADY_EXISTS',
+    'PERMISSION_DENIED',
+    'UNAUTHENTICATED',
+  ].includes(code);
+}
+```
+
+### Logging Errors
+
+Log errors with sufficient context:
+
+```typescript
+try {
+  await client.createCustomer(request);
+} catch (error) {
+  console.error('Failed to create customer:', {
+    code: error.code,
+    message: error.message,
+    request: sanitizeForLogging(request),
+    timestamp: new Date().toISOString(),
+  });
+  
+  // Re-throw or handle appropriately
+  throw error;
+}
+```
+
+### User-Friendly Messages
+
+Translate technical errors to user-friendly messages:
+
+```typescript
+function getUserFriendlyMessage(error: any): string {
+  switch (error.code) {
+    case 'UNAUTHENTICATED':
+      return 'Please log in to continue';
+    case 'PERMISSION_DENIED':
+      return 'You don\'t have permission to perform this action';
+    case 'NOT_FOUND':
+      return 'The requested resource was not found';
+    case 'ALREADY_EXISTS':
+      return 'This resource already exists';
+    case 'INVALID_ARGUMENT':
+      return error.message; // Usually already user-friendly
+    case 'UNAVAILABLE':
+      return 'Service temporarily unavailable. Please try again.';
+    default:
+      return 'An unexpected error occurred. Please try again or contact support.';
+  }
+}
+```
+
+## Health Checks
+
+Monitor service health to prevent errors:
+
+### REST API Health Check
+
+```bash
+curl http://localhost:8084/health
+```
+
+**Responses:**
+- `200 OK` - Service is ready
+- `503 NOT_READY` - Service is starting up
+
+### Implementing Health Checks
+
+```typescript
+async function waitForServiceReady(maxWait = 30000): Promise<void> {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < maxWait) {
+    try {
+      const response = await fetch('http://localhost:8084/health');
+      if (response.ok) {
+        return;
+      }
+    } catch (error) {
+      // Service not reachable yet
+    }
+    
+    await sleep(1000);
+  }
+  
+  throw new Error('Service did not become ready in time');
+}
+```
+
+## Troubleshooting Guide
+
+### Step 1: Check Authentication
+
+1. Verify API key is included in headers
+2. Confirm API key is valid and not revoked
+3. Check token format is correct
+
+### Step 2: Verify Permissions
+
+1. Confirm you're using the right authentication method
+2. Check if the endpoint requires user JWT instead of API key
+3. Verify organization/tenant context is correct
+
+### Step 3: Validate Request
+
+1. Review request parameters
+2. Check required fields are present
+3. Verify data types and formats
+
+### Step 4: Check Service Status
+
+1. Verify service is running
+2. Check health endpoint
+3. Review server logs
+
+### Step 5: Review Rate Limits
+
+1. Check for `RESOURCE_EXHAUSTED` errors
+2. Implement backoff strategy
+3. Consider request batching
+
+## Getting Help
+
+If you continue to experience errors:
+
+1. **Check Server Logs**: Error details are logged server-side
+2. **Review Documentation**: Ensure you're following the API specifications
+3. **Contact Support**: Provide error codes, timestamps, and request IDs
+
+<CardGroup cols={2}>
+  <Card title="API Introduction" icon="book" href="/api/introduction">
+    Return to API overview
+  </Card>
+  <Card title="Authentication" icon="key" href="/api/authentication">
+    Review authentication setup
+  </Card>
+</CardGroup>

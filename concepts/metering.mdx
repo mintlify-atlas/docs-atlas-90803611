@@ -1,0 +1,573 @@
+---
+title: Metering & Usage Tracking
+description: Understanding event ingestion and usage aggregation in Meteroid
+icon: gauge
+---
+
+## Overview
+
+**Metering** is the process of collecting, storing, and aggregating usage data from your application to enable usage-based billing. Meteroid's metering system is built on Kafka for event streaming and ClickHouse for high-performance time-series storage and analytics.
+
+## Architecture
+
+The metering pipeline follows this flow:
+
+```
+Your Application
+    ↓ (send events via API)
+  Metering API
+    ↓ (publish)
+   Kafka Topic
+    ↓ (consume)
+ ClickHouse Database
+    ↓ (query)
+  Billing Engine
+    ↓
+  Invoices
+```
+
+## Usage Events
+
+A **usage event** represents a single occurrence of measurable activity in your system.
+
+Defined at `modules/metering/proto/events.proto:5-18` and `modules/metering/proto/models.proto:5-18`:
+
+```protobuf
+message Event {
+  string id = 1;                          // Unique event ID (idempotency)
+  string code = 2;                        // Billable metric code
+  oneof customer_id {
+    string meteroid_customer_id = 3;      // Meteroid customer ID
+    string external_customer_alias = 4;   // External customer identifier
+  }
+  string timestamp = 5;                   // RFC3339 timestamp
+  map<string, string> properties = 6;     // Event metadata
+}
+```
+
+### Event Properties
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `id` | Yes | Unique identifier (UUID recommended). Used for idempotency - duplicate IDs are ignored. |
+| `code` | Yes | Matches the `code` field of a billable metric (e.g., `api_calls`, `compute_hours`) |
+| `customer_id` | Yes | Either Meteroid customer ID or your external alias |
+| `timestamp` | Yes | When the event occurred (RFC3339 format: `2024-03-15T10:30:00Z`) |
+| `properties` | No | Additional dimensions for aggregation or segmentation |
+
+### Example Events
+
+**Simple API call:**
+```json
+{
+  "id": "evt_1234567890",
+  "code": "api_calls",
+  "meteroid_customer_id": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2024-03-15T10:30:00Z",
+  "properties": {
+    "endpoint": "/api/v1/users",
+    "method": "GET"
+  }
+}
+```
+
+**Data transfer with value:**
+```json
+{
+  "id": "evt_0987654321",
+  "code": "data_transfer_gb",
+  "external_customer_alias": "customer_acme_corp",
+  "timestamp": "2024-03-15T10:35:00Z",
+  "properties": {
+    "value": "2.5",        // 2.5 GB transferred
+    "region": "us-east-1",
+    "direction": "egress"
+  }
+}
+```
+
+**Compute usage with dimensions:**
+```json
+{
+  "id": "evt_compute_001",
+  "code": "compute_hours",
+  "meteroid_customer_id": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2024-03-15T11:00:00Z",
+  "properties": {
+    "value": "1.0",         // 1 hour
+    "instance_type": "m5.xlarge",
+    "region": "us-west-2"
+  }
+}
+```
+
+## Billable Metrics
+
+**Billable Metrics** define how events are aggregated for billing purposes.
+
+From `modules/metering/proto/models.proto:25-55`:
+
+```protobuf
+message Meter {
+  string id = 1;
+  string code = 3;                           // Matches event code
+  optional string aggregation_key = 4;       // Property to aggregate (e.g., "value")
+  AggregationType aggregation = 5;
+  repeated string dimensions = 6;            // Properties for segmentation
+
+  enum AggregationType {
+    SUM = 0;           // Add all values
+    MIN = 1;           // Minimum value
+    MAX = 2;           // Maximum value
+    MEAN = 3;          // Average value
+    LATEST = 4;        // Most recent value
+    COUNT = 5;         // Count of events
+    COUNT_DISTINCT = 6; // Count unique values
+  }
+}
+```
+
+### Aggregation Examples
+
+#### COUNT - Count Events
+
+Count the number of API calls:
+
+```json
+{
+  "code": "api_calls",
+  "aggregation": "COUNT"
+}
+```
+
+Events:
+- Event 1: API call
+- Event 2: API call  
+- Event 3: API call
+
+Result: `3 calls`
+
+#### SUM - Add Values
+
+Sum data transfer in GB:
+
+```json
+{
+  "code": "data_transfer_gb",
+  "aggregation": "SUM",
+  "aggregation_key": "value"
+}
+```
+
+Events:
+- Event 1: `{"value": "2.5"}`
+- Event 2: `{"value": "1.0"}`
+- Event 3: `{"value": "3.2"}`
+
+Result: `6.7 GB`
+
+#### COUNT_DISTINCT - Unique Values
+
+Count unique active users:
+
+```json
+{
+  "code": "active_users",
+  "aggregation": "COUNT_DISTINCT",
+  "aggregation_key": "user_id"
+}
+```
+
+Events:
+- Event 1: `{"user_id": "user_123"}`
+- Event 2: `{"user_id": "user_456"}`
+- Event 3: `{"user_id": "user_123"}` (duplicate)
+
+Result: `2 users`
+
+#### MAX - Maximum Value
+
+Track peak concurrent connections:
+
+```json
+{
+  "code": "peak_connections",
+  "aggregation": "MAX",
+  "aggregation_key": "connections"
+}
+```
+
+Events:
+- Event 1: `{"connections": "50"}`
+- Event 2: `{"connections": "85"}`
+- Event 3: `{"connections": "72"}`
+
+Result: `85 connections`
+
+#### LATEST - Most Recent Value
+
+Track current storage usage:
+
+```json
+{
+  "code": "storage_gb",
+  "aggregation": "LATEST",
+  "aggregation_key": "value"
+}
+```
+
+Events (with timestamps):
+- 10:00 AM: `{"value": "100"}`
+- 11:00 AM: `{"value": "150"}`
+- 12:00 PM: `{"value": "175"}`
+
+Result: `175 GB` (latest)
+
+## Segmentation
+
+Segmentation allows multi-dimensional pricing based on event properties.
+
+From `modules/meteroid/proto/api/billablemetrics/v1/models.proto:35-65`:
+
+```protobuf
+message SegmentationMatrix {
+  oneof matrix {
+    SegmentationMatrixSingle single = 1;   // One dimension
+    SegmentationMatrixDouble double = 2;   // Two dimensions  
+    SegmentationMatrixLinked linked = 3;   // Linked dimensions
+  }
+
+  message Dimension {
+    string key = 1;              // Property name (e.g., "region")
+    repeated string values = 2;  // Allowed values (e.g., ["us", "eu"])
+  }
+}
+```
+
+### Single Dimension Example
+
+Price compute differently by instance type:
+
+```json
+{
+  "code": "compute_hours",
+  "aggregation": "SUM",
+  "aggregation_key": "value",
+  "segmentation_matrix": {
+    "single": {
+      "dimension": {
+        "key": "instance_type",
+        "values": ["small", "medium", "large"]
+      }
+    }
+  }
+}
+```
+
+Results in separate aggregations:
+- `small`: 100 hours @ $0.10/hour = $10
+- `medium`: 50 hours @ $0.20/hour = $10  
+- `large`: 10 hours @ $0.40/hour = $4
+
+### Double Dimension Example
+
+Price by both instance type AND region:
+
+```json
+{
+  "code": "compute_hours",
+  "segmentation_matrix": {
+    "double": {
+      "dimension1": {
+        "key": "instance_type",
+        "values": ["small", "medium", "large"]
+      },
+      "dimension2": {
+        "key": "region",
+        "values": ["us", "eu", "asia"]
+      }
+    }
+  }
+}
+```
+
+Results in matrix pricing (9 combinations):
+- `small × us`: 100 hours @ $0.10/hour
+- `small × eu`: 80 hours @ $0.12/hour
+- `medium × us`: 50 hours @ $0.20/hour
+- ... (6 more combinations)
+
+## Event Ingestion API
+
+Send events to Meteroid's metering API at `modules/metering/proto/events.proto:7-11`:
+
+```protobuf
+message IngestRequest {
+  repeated Event events = 1;             // Batch of events
+  bool allow_backfilling = 2;            // Allow old timestamps
+}
+```
+
+### Batch Ingestion
+
+Send multiple events in a single request:
+
+```bash
+curl -X POST "https://api.meteroid.com/api/v1/events/ingest" \
+  -H "Authorization: Bearer {api_token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": [
+      {
+        "id": "evt_001",
+        "code": "api_calls",
+        "meteroid_customer_id": "550e8400-e29b-41d4-a716-446655440000",
+        "timestamp": "2024-03-15T10:00:00Z",
+        "properties": {}
+      },
+      {
+        "id": "evt_002",
+        "code": "api_calls",
+        "meteroid_customer_id": "550e8400-e29b-41d4-a716-446655440000",
+        "timestamp": "2024-03-15T10:05:00Z",
+        "properties": {}
+      }
+    ],
+    "allow_backfilling": false
+  }'
+```
+
+### Response
+
+```protobuf
+message IngestResponse {
+  repeated IngestFailure failures = 1;
+}
+
+message IngestFailure {
+  string event_id = 1;
+  string reason = 2;
+}
+```
+
+If all events succeed, `failures` will be empty. Failed events include the event ID and reason.
+
+## Data Storage
+
+### Kafka Event Streaming
+
+Events are published to Kafka topics for:
+- **Durability**: Events are persisted even if ClickHouse is unavailable
+- **Replayability**: Can reprocess historical events if needed
+- **Scalability**: Handles high-throughput event streams
+- **Decoupling**: Separates ingestion from processing
+
+### ClickHouse Analytics
+
+Events are stored in ClickHouse (referenced in `modules/metering/src/connectors/clickhouse/sql/init.rs:3-5`):
+
+```rust
+pub fn get_events_table_name() -> String {
+    format!("{}.{}", DATABASE, "raw_events")
+}
+```
+
+ClickHouse provides:
+- **Fast aggregation**: Sub-second queries over billions of events
+- **Compression**: 10-100x data compression for cost efficiency
+- **Time-series optimization**: Optimized for timestamp-based queries
+- **Columnar storage**: Efficient for analytical workloads
+
+## Idempotency
+
+Metering supports idempotent event ingestion:
+
+- Each event requires a unique `id`
+- Duplicate `id` values are automatically ignored
+- Allows safe retry of failed requests
+- Prevents double-counting usage
+
+**Best practice:** Generate event IDs from deterministic data:
+
+```javascript
+// Good: Deterministic ID based on unique transaction
+const eventId = `${customerId}_${transactionId}_${timestamp}`;
+
+// Bad: Random ID (can't safely retry)
+const eventId = Math.random().toString();
+```
+
+## Backfilling Historical Data
+
+By default, Meteroid rejects events with timestamps too far in the past (configurable grace period).
+
+To ingest historical data, set `allow_backfilling: true`:
+
+```json
+{
+  "events": [...],
+  "allow_backfilling": true  // Allow old timestamps
+}
+```
+
+<Warning>
+  Backfilling can affect already-finalized invoices. Only use for migrations or corrections, not regular operations.
+</Warning>
+
+## Unit Conversion
+
+Metrics support unit conversion for normalization at `modules/meteroid/proto/api/billablemetrics/v1/models.proto:20-33`:
+
+```protobuf
+message UnitConversion {
+  enum UnitConversionRounding {
+    NONE = 0;      // No rounding
+    UP = 1;        // Round up (ceiling)
+    DOWN = 2;      // Round down (floor)
+    NEAREST = 3;   // Round to nearest
+  }
+  double factor = 1;                      // Multiplication factor
+  UnitConversionRounding rounding = 2;
+}
+```
+
+Example: Convert bytes to GB:
+
+```json
+{
+  "code": "data_transfer",
+  "aggregation": "SUM",
+  "aggregation_key": "bytes",
+  "unit_conversion": {
+    "factor": 0.000000001,  // bytes to GB (1/1e9)
+    "rounding": "UP"         // Round up to nearest GB
+  }
+}
+```
+
+Events send bytes: `1,500,000,000 bytes`
+After conversion: `1.5 GB`
+After rounding: `2 GB` (rounded up)
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Send events in real-time">
+    Send events as they occur rather than batching for long periods. This enables real-time usage dashboards and prevents data loss.
+  </Accordion>
+  
+  <Accordion title="Use batching for efficiency">
+    While real-time is preferred, batch events in groups of 100-1000 to reduce API calls and improve throughput.
+  </Accordion>
+  
+  <Accordion title="Generate deterministic event IDs">
+    Create event IDs from transaction data to enable safe retries: `${customerId}_${resourceId}_${timestamp}`
+  </Accordion>
+  
+  <Accordion title="Include relevant dimensions">
+    Add properties you might want to segment by later (region, product tier, etc.) even if not immediately used for pricing.
+  </Accordion>
+  
+  <Accordion title="Use appropriate aggregation types">
+    - COUNT: For discrete events (API calls, transactions)
+    - SUM: For measurable quantities (data transfer, compute time)
+    - COUNT_DISTINCT: For unique entities (active users, devices)
+    - LATEST: For gauge metrics (storage, seats)
+  </Accordion>
+  
+  <Accordion title="Set up monitoring">
+    Monitor event ingestion for failures, delays, and volume spikes. Alert on high failure rates.
+  </Accordion>
+</AccordionGroup>
+
+## SDK Examples
+
+### Python
+
+```python
+import requests
+from datetime import datetime
+import uuid
+
+def send_usage_event(customer_id, metric_code, value=None, properties=None):
+    event = {
+        "id": str(uuid.uuid4()),
+        "code": metric_code,
+        "meteroid_customer_id": customer_id,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "properties": properties or {}
+    }
+    
+    if value is not None:
+        event["properties"]["value"] = str(value)
+    
+    response = requests.post(
+        "https://api.meteroid.com/api/v1/events/ingest",
+        headers={
+            "Authorization": f"Bearer {API_TOKEN}",
+            "Content-Type": "application/json"
+        },
+        json={"events": [event]}
+    )
+    
+    return response.json()
+
+# Usage
+send_usage_event(
+    customer_id="550e8400-e29b-41d4-a716-446655440000",
+    metric_code="api_calls",
+    properties={"endpoint": "/api/v1/users", "method": "GET"}
+)
+```
+
+### Node.js
+
+```javascript
+const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
+
+async function sendUsageEvent(customerId, metricCode, value, properties = {}) {
+  const event = {
+    id: uuidv4(),
+    code: metricCode,
+    meteroid_customer_id: customerId,
+    timestamp: new Date().toISOString(),
+    properties: value ? { ...properties, value: String(value) } : properties
+  };
+  
+  const response = await axios.post(
+    'https://api.meteroid.com/api/v1/events/ingest',
+    { events: [event] },
+    {
+      headers: {
+        'Authorization': `Bearer ${API_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+  
+  return response.data;
+}
+
+// Usage
+await sendUsageEvent(
+  '550e8400-e29b-41d4-a716-446655440000',
+  'data_transfer_gb',
+  2.5,
+  { region: 'us-east-1', direction: 'egress' }
+);
+```
+
+## Related Concepts
+
+<CardGroup cols={2}>
+  <Card title="Pricing Plans" icon="tags" href="/concepts/pricing-plans">
+    Learn how billable metrics are used in pricing
+  </Card>
+  <Card title="Subscriptions" icon="calendar-check" href="/concepts/subscriptions">
+    Understand how usage affects subscriptions
+  </Card>
+  <Card title="Invoicing" icon="file-invoice-dollar" href="/concepts/invoicing">
+    See how usage becomes invoice line items
+  </Card>
+</CardGroup>

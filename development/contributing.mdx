@@ -1,0 +1,243 @@
+---
+title: Contributing Guide
+description: Learn how to contribute to Meteroid and set up your development environment
+---
+
+Welcome to the Meteroid contributing guide! This page will help you get started with developing Meteroid.
+
+## Prerequisites
+
+Before you begin, ensure you have the following tools installed:
+
+- [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) - Rust package manager
+- [pnpm](https://pnpm.io/installation) - Fast, disk space efficient package manager
+- [protoc](https://grpc.io/docs/protoc-installation/) - Protocol Buffer compiler
+- [docker-compose](https://docs.docker.com/compose/install/) - Container orchestration tool
+
+Make sure **your Docker daemon is running** before proceeding.
+
+## Version Requirements
+
+<Note>
+Ensure your system meets these minimum version requirements:
+</Note>
+
+- **Postgres** >= 12
+- **Rust** >= 1.74
+- **Node** >= 20
+- **pnpm** >= 8
+- **protoc** >= 3.17
+- **Docker** >= 27
+
+## Initial Setup
+
+### 1. Install Dependencies & Build
+
+Build the Meteroid backend:
+
+```bash
+cargo build -p meteroid
+```
+
+If you need the metering API, also build the metering module:
+
+```bash
+cargo build -p metering
+```
+
+Install web dependencies:
+
+```bash
+pnpm install --prefix modules/web
+```
+
+### 2. Configure Environment
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your local configuration as needed.
+
+## Running Meteroid Locally
+
+### Without Metering (Recommended for Basic Development)
+
+Metering requires additional resources (ClickHouse + Kafka). If you don't need metering functionality, you can run without it.
+
+**1. Start the database:**
+
+```bash
+docker compose -f docker/develop/docker-compose.yml --env-file .env up
+```
+
+**2. Start the Rust backend:**
+
+```bash
+cargo run -p meteroid --bin standalone
+```
+
+**3. Start the web frontend:**
+
+```bash
+pnpm --prefix modules/web/web-app run dev
+```
+
+**4. Access the application:**
+
+Open your browser to [http://localhost:5173](http://localhost:5173)
+
+### With Metering (Full Stack)
+
+If you need metering functionality:
+
+**1. Start the database with metering profile:**
+
+```bash
+docker compose -f docker/develop/docker-compose.yml --env-file .env --profile metering up
+```
+
+**2. Start the Rust backend with metering features:**
+
+```bash
+cargo run -p meteroid --bin standalone --features="metering-server"
+```
+
+**3. Start the web frontend:**
+
+```bash
+pnpm --prefix modules/web/web-app run dev
+```
+
+**4. Access the application:**
+
+Open your browser to [http://localhost:5173](http://localhost:5173)
+
+## Development Workflow
+
+### After Pulling Changes
+
+When you pull updates from the repository, rebuild dependencies:
+
+```bash
+cargo build -p meteroid
+cargo build -p metering
+pnpm install --prefix modules/web
+```
+
+### Updating Protobuf Files
+
+Protobuf files are located in:
+- `/modules/meteroid/proto`
+- `/modules/metering/proto`
+
+After modifying `.proto` files, rebuild Rust and reinstall web dependencies:
+
+```bash
+cargo build -p meteroid
+cargo build -p metering
+pnpm install --prefix modules/web
+```
+
+### Updating the OpenAPI Specification
+
+The OpenAPI specification is generated from route annotations in `modules/meteroid/src/api_rest`.
+
+After modifying routes, regenerate the spec:
+
+```bash
+cargo run -p meteroid --bin openapi-generate
+```
+
+The generated file is located at `spec/api/v1/openapi.json`.
+
+### Database Migrations
+
+To add a new database migration:
+
+**1. Ensure the database server is running**
+
+**2. Install diesel_cli (if not already installed):**
+
+```bash
+cargo install diesel_cli --no-default-features --features postgres
+```
+
+**3. Create the migration:**
+
+```bash
+diesel migration generate <migration_name>
+```
+
+This generates empty migration files under `modules/meteroid/migrations/diesel`.
+
+**4. Add SQL code to the generated migration files**
+
+**5. Apply the migration:**
+
+```bash
+diesel migration run
+```
+
+This applies the migration(s) and regenerates the `schema.rs` file.
+
+**6. Revert the migration (if needed):**
+
+```bash
+diesel migration revert
+```
+
+<Info>
+Migrations run automatically on meteroid_api startup for any unapplied migrations.
+</Info>
+
+See the [Diesel Getting Started Guide](https://diesel.rs/guides/getting-started) for more information.
+
+## Frontend-Only Development
+
+If you're working only on the frontend and don't want to build the Rust backend:
+
+**1. Copy the environment file:**
+
+```bash
+cp .env.example .env
+```
+
+**2. Start the database and API using Docker:**
+
+```bash
+docker compose -f docker/develop/for-frontends/docker-compose-lite.yml --env-file .env up
+```
+
+This starts the latest API Docker image from the main branch.
+
+<Warning>
+This lightweight setup doesn't include the metering server or automation processes (invoice finalization, payments, etc.), so some functionality will be limited.
+</Warning>
+
+**3. Start the frontend:**
+
+```bash
+pnpm install --prefix modules/web
+pnpm --prefix modules/web/web-app dev
+```
+
+**4. Access the application:**
+
+Open your browser to [http://localhost:5173](http://localhost:5173)
+
+## Next Steps
+
+- Learn about [building from source](/development/building-from-source)
+- Explore the [architecture overview](/development/architecture-overview)
+- Check out our [deployment guides](/deployment/overview)
+
+## Getting Help
+
+If you encounter issues or have questions:
+
+- Join our [Discord community](https://go.meteroid.com/discord?utm_source=docs)
+- Open an issue on [GitHub](https://github.com/meteroid-oss/meteroid/issues)
+- Check the [troubleshooting guide](/troubleshooting)

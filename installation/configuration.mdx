@@ -1,0 +1,613 @@
+---
+title: Configuration Reference
+description: Complete environment variable and configuration reference for Meteroid
+---
+
+This page documents all available configuration options for Meteroid services. Configuration is provided via environment variables.
+
+## Platform Secrets
+
+Core secrets required for authentication and encryption.
+
+<ParamField path="JWT_SECRET" type="string" required>
+  Secret key used for signing and validating JWT authentication tokens.
+  
+  - Used by: meteroid-api, meteroid-scheduler
+  - Generate with: `openssl rand -base64 32`
+  
+  ```bash
+  JWT_SECRET=changeMeSecret
+  ```
+  
+  <Warning>
+    Use a strong, randomly generated value in production. Never commit secrets to version control.
+  </Warning>
+</ParamField>
+
+<ParamField path="INTERNAL_API_SECRET" type="string" required>
+  Secret for authenticating internal service-to-service API calls.
+  
+  - Used by: meteroid-api, meteroid-scheduler, metering-api
+  - Should be different from `JWT_SECRET`
+  
+  ```bash
+  INTERNAL_API_SECRET=changeMeSecret
+  ```
+</ParamField>
+
+<ParamField path="SECRETS_CRYPT_KEY" type="string" required>
+  Encryption key for sensitive data stored in the database (OAuth tokens, API keys, etc.).
+  
+  - **Must be exactly 32 characters long**
+  - Used by: meteroid-api, meteroid-scheduler
+  - Generate with: `openssl rand -hex 16`
+  
+  ```bash
+  SECRETS_CRYPT_KEY=00000000000000000000000000000000
+  ```
+  
+  <Warning>
+    This key cannot be changed after data is encrypted. Store it securely and back it up.
+  </Warning>
+</ParamField>
+
+## Billing API Configuration
+
+Configuration for the core Meteroid billing API service.
+
+<ParamField path="METEROID_API_LISTEN_ADDRESS" type="string" default="0.0.0.0:50061">
+  gRPC server listen address for the billing API.
+  
+  ```bash
+  METEROID_API_LISTEN_ADDRESS=0.0.0.0:50061
+  ```
+</ParamField>
+
+<ParamField path="METEROID_API_EXTERNAL_URL" type="string" default="http://127.0.0.1:50061">
+  External URL where the gRPC API is accessible (used for generating links).
+  
+  ```bash
+  METEROID_API_EXTERNAL_URL=https://api.meteroid.com
+  ```
+</ParamField>
+
+<ParamField path="METEROID_REST_API_LISTEN_ADDRESS" type="string" default="0.0.0.0:8084">
+  REST API server listen address.
+  
+  ```bash
+  METEROID_REST_API_LISTEN_ADDRESS=0.0.0.0:8084
+  ```
+</ParamField>
+
+<ParamField path="METEROID_REST_API_EXTERNAL_URL" type="string" default="http://127.0.0.1:8084">
+  External URL where the REST API is accessible.
+  
+  ```bash
+  METEROID_REST_API_EXTERNAL_URL=https://api.meteroid.com/api
+  ```
+</ParamField>
+
+<ParamField path="METEROID_PUBLIC_URL" type="string" default="http://localhost:5173">
+  Public URL for the Meteroid web interface (used in emails and webhooks).
+  
+  ```bash
+  METEROID_PUBLIC_URL=https://meteroid.example.com
+  ```
+</ParamField>
+
+<ParamField path="ENABLE_MULTI_ORGANIZATION" type="boolean" default="false">
+  Enable multi-organization mode for SaaS deployments.
+  
+  ```bash
+  ENABLE_MULTI_ORGANIZATION=true
+  ```
+</ParamField>
+
+<ParamField path="OPENEXCHANGERATES_API_KEY" type="string">
+  API key for Open Exchange Rates (for currency conversion).
+  
+  ```bash
+  OPENEXCHANGERATES_API_KEY=your-api-key
+  ```
+  
+  Get your API key at [openexchangerates.org](https://openexchangerates.org/)
+</ParamField>
+
+## Metering API Configuration
+
+Configuration for the usage metering service.
+
+<ParamField path="METERING_API_LISTEN_ADDRESS" type="string" default="0.0.0.0:50062">
+  gRPC server listen address for the metering API.
+  
+  ```bash
+  METERING_API_LISTEN_ADDRESS=0.0.0.0:50062
+  ```
+</ParamField>
+
+<ParamField path="METERING_API_EXTERNAL_URL" type="string" default="http://127.0.0.1:50062">
+  External URL for the metering API (used by billing service).
+  
+  ```bash
+  METERING_API_EXTERNAL_URL=http://metering-api:50062
+  ```
+</ParamField>
+
+## Database Configuration
+
+PostgreSQL database connection settings.
+
+<ParamField path="DATABASE_USER" type="string" default="meteroid">
+  PostgreSQL database username.
+  
+  ```bash
+  DATABASE_USER=meteroid
+  ```
+</ParamField>
+
+<ParamField path="DATABASE_PASSWORD" type="string" required>
+  PostgreSQL database password.
+  
+  ```bash
+  DATABASE_PASSWORD=secret
+  ```
+</ParamField>
+
+<ParamField path="DATABASE_NAME" type="string" default="meteroid">
+  PostgreSQL database name.
+  
+  ```bash
+  DATABASE_NAME=meteroid
+  ```
+</ParamField>
+
+<ParamField path="DATABASE_URL" type="string" required>
+  Full PostgreSQL connection URL.
+  
+  - Used by: meteroid-api, meteroid-scheduler
+  - Format: `postgres://user:password@host:port/database?options`
+  
+  ```bash
+  DATABASE_URL=postgres://meteroid:secret@localhost:5432/meteroid?sslmode=disable
+  ```
+  
+  <Info>
+    For production, use `sslmode=require` or `sslmode=verify-full` for encrypted connections.
+  </Info>
+</ParamField>
+
+## ClickHouse Configuration
+
+ClickHouse analytics database settings for usage events.
+
+<ParamField path="CLICKHOUSE_DATABASE" type="string" default="meteroid">
+  ClickHouse database name.
+  
+  ```bash
+  CLICKHOUSE_DATABASE=meteroid
+  ```
+</ParamField>
+
+<ParamField path="CLICKHOUSE_HTTP_ADDRESS" type="string" default="http://127.0.0.1:8123">
+  ClickHouse HTTP interface URL.
+  
+  ```bash
+  CLICKHOUSE_HTTP_ADDRESS=http://clickhouse:8123
+  ```
+</ParamField>
+
+<ParamField path="CLICKHOUSE_TCP_ADDRESS" type="string" default="127.0.0.1:9000">
+  ClickHouse native protocol address.
+  
+  ```bash
+  CLICKHOUSE_TCP_ADDRESS=clickhouse:9000
+  ```
+</ParamField>
+
+<ParamField path="CLICKHOUSE_USERNAME" type="string" default="default">
+  ClickHouse username.
+  
+  ```bash
+  CLICKHOUSE_USERNAME=meteroid
+  ```
+</ParamField>
+
+<ParamField path="CLICKHOUSE_PASSWORD" type="string" default="default">
+  ClickHouse password.
+  
+  ```bash
+  CLICKHOUSE_PASSWORD=secure-password
+  ```
+  
+  <Warning>
+    Change the default password in production deployments.
+  </Warning>
+</ParamField>
+
+## Kafka Configuration
+
+Event streaming configuration for usage events.
+
+<ParamField path="KAFKA_BOOTSTRAP_SERVERS" type="string" default="127.0.0.1:9092">
+  Comma-separated list of Kafka broker addresses.
+  
+  ```bash
+  KAFKA_BOOTSTRAP_SERVERS=kafka-1:9092,kafka-2:9092,kafka-3:9092
+  ```
+</ParamField>
+
+<ParamField path="KAFKA_RAW_TOPIC" type="string" default="meteroid-events-raw">
+  Kafka topic name for raw usage events.
+  
+  ```bash
+  KAFKA_RAW_TOPIC=meteroid-events-raw
+  ```
+</ParamField>
+
+### Kafka SASL Authentication (Optional)
+
+<ParamField path="KAFKA_SECURITY_PROTOCOL" type="string">
+  Security protocol for Kafka connection.
+  
+  - Options: `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT`, `SASL_SSL`
+  
+  ```bash
+  KAFKA_SECURITY_PROTOCOL=SASL_SSL
+  ```
+</ParamField>
+
+<ParamField path="KAFKA_SASL_MECHANISM" type="string">
+  SASL mechanism for authentication.
+  
+  - Options: `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`
+  
+  ```bash
+  KAFKA_SASL_MECHANISM=SCRAM-SHA-256
+  ```
+</ParamField>
+
+<ParamField path="KAFKA_SASL_USERNAME" type="string">
+  SASL username for Kafka authentication.
+  
+  ```bash
+  KAFKA_SASL_USERNAME=meteroid
+  ```
+</ParamField>
+
+<ParamField path="KAFKA_SASL_PASSWORD" type="string">
+  SASL password for Kafka authentication.
+  
+  ```bash
+  KAFKA_SASL_PASSWORD=kafka-password
+  ```
+</ParamField>
+
+<ParamField path="KAFKA_SASL_JAAS_CONFIG" type="string">
+  Full JAAS configuration string (alternative to username/password).
+  
+  ```bash
+  KAFKA_SASL_JAAS_CONFIG=org.apache.kafka.common.security.plain.PlainLoginModule required username="meteroid" password="kafka-password";
+  ```
+</ParamField>
+
+## Object Storage
+
+Configuration for storing files (invoices, exports, etc.).
+
+<ParamField path="OBJECT_STORE_URI" type="string" default="file:///tmp/meteroid/object-store">
+  Object storage backend URI.
+  
+  **Filesystem Storage:**
+  ```bash
+  OBJECT_STORE_URI=file:///data/object-store
+  ```
+  
+  **S3-Compatible Storage:**
+  ```bash
+  OBJECT_STORE_URI=s3://meteroid-bucket
+  ```
+</ParamField>
+
+### S3/MinIO Configuration
+
+Required when using S3-compatible object storage.
+
+<ParamField path="AWS_ACCESS_KEY_ID" type="string">
+  AWS or MinIO access key ID.
+  
+  ```bash
+  AWS_ACCESS_KEY_ID=your-access-key
+  ```
+</ParamField>
+
+<ParamField path="AWS_SECRET_ACCESS_KEY" type="string">
+  AWS or MinIO secret access key.
+  
+  ```bash
+  AWS_SECRET_ACCESS_KEY=your-secret-key
+  ```
+</ParamField>
+
+<ParamField path="AWS_ENDPOINT" type="string">
+  Custom S3 endpoint (for MinIO or S3-compatible services).
+  
+  ```bash
+  AWS_ENDPOINT=http://minio:9000
+  ```
+</ParamField>
+
+<ParamField path="AWS_ALLOW_HTTP" type="boolean" default="false">
+  Allow HTTP connections to S3 (use only for local development).
+  
+  ```bash
+  AWS_ALLOW_HTTP=true
+  ```
+</ParamField>
+
+## Webhooks (Svix)
+
+Configuration for webhook delivery using [Svix](https://www.svix.com/).
+
+<ParamField path="SVIX_JWT_TOKEN" type="string">
+  Svix JWT token for authentication.
+  
+  - Get from Svix dashboard or generate with self-hosted Svix
+  
+  ```bash
+  SVIX_JWT_TOKEN=your-svix-jwt-token
+  ```
+</ParamField>
+
+<ParamField path="SVIX_JWT_SECRET" type="string">
+  Alternative: Svix JWT secret for token generation.
+  
+  ```bash
+  SVIX_JWT_SECRET=changeMeSecret
+  ```
+</ParamField>
+
+<ParamField path="SVIX_SERVER_URL" type="string">
+  Svix server URL (for self-hosted Svix).
+  
+  - Default: Svix Cloud (https://api.svix.com or https://api.eu.svix.com)
+  
+  ```bash
+  SVIX_SERVER_URL=http://localhost:8071
+  ```
+</ParamField>
+
+## Email (SMTP)
+
+Email configuration for sending invoices and notifications.
+
+<ParamField path="MAILER_SMTP_HOST" type="string">
+  SMTP server hostname.
+  
+  ```bash
+  MAILER_SMTP_HOST=smtp.gmail.com
+  ```
+</ParamField>
+
+<ParamField path="MAILER_SMTP_USERNAME" type="string">
+  SMTP authentication username.
+  
+  ```bash
+  MAILER_SMTP_USERNAME=your-email@example.com
+  ```
+</ParamField>
+
+<ParamField path="MAILER_SMTP_PASSWORD" type="string">
+  SMTP authentication password.
+  
+  ```bash
+  MAILER_SMTP_PASSWORD=your-smtp-password
+  ```
+</ParamField>
+
+<ParamField path="MAILER_SMTP_TLS" type="boolean" default="false">
+  Enable TLS for SMTP connection.
+  
+  ```bash
+  MAILER_SMTP_TLS=true
+  ```
+</ParamField>
+
+<ParamField path="MAILER_FROM" type="string">
+  Email sender address and display name.
+  
+  ```bash
+  MAILER_FROM="Meteroid Billing <billing@example.com>"
+  ```
+</ParamField>
+
+## OAuth Configuration
+
+OAuth provider credentials for integrations.
+
+### Google OAuth
+
+<ParamField path="OAUTH_GOOGLE_CLIENT_ID" type="string">
+  Google OAuth 2.0 client ID.
+  
+  Get from [Google Cloud Console](https://console.cloud.google.com/)
+  
+  ```bash
+  OAUTH_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+  ```
+</ParamField>
+
+<ParamField path="OAUTH_GOOGLE_CLIENT_SECRET" type="string">
+  Google OAuth 2.0 client secret.
+  
+  ```bash
+  OAUTH_GOOGLE_CLIENT_SECRET=your-client-secret
+  ```
+</ParamField>
+
+### HubSpot OAuth
+
+<ParamField path="OAUTH_HUBSPOT_CLIENT_ID" type="string">
+  HubSpot OAuth app client ID.
+  
+  Get from [HubSpot Developer Portal](https://developers.hubspot.com/)
+  
+  ```bash
+  OAUTH_HUBSPOT_CLIENT_ID=your-hubspot-client-id
+  ```
+</ParamField>
+
+<ParamField path="OAUTH_HUBSPOT_CLIENT_SECRET" type="string">
+  HubSpot OAuth app client secret.
+  
+  ```bash
+  OAUTH_HUBSPOT_CLIENT_SECRET=your-hubspot-client-secret
+  ```
+</ParamField>
+
+### Pennylane OAuth
+
+<ParamField path="OAUTH_PENNYLANE_CLIENT_ID" type="string">
+  Pennylane OAuth app client ID.
+  
+  Get from [Pennylane Developer Portal](https://www.pennylane.com/)
+  
+  ```bash
+  OAUTH_PENNYLANE_CLIENT_ID=your-pennylane-client-id
+  ```
+</ParamField>
+
+<ParamField path="OAUTH_PENNYLANE_CLIENT_SECRET" type="string">
+  Pennylane OAuth app client secret.
+  
+  ```bash
+  OAUTH_PENNYLANE_CLIENT_SECRET=your-pennylane-client-secret
+  ```
+</ParamField>
+
+## Web Frontend Configuration
+
+Environment variables for the web dashboard.
+
+<ParamField path="VITE_METEROID_API_EXTERNAL_URL" type="string">
+  gRPC API URL accessible from the browser.
+  
+  ```bash
+  VITE_METEROID_API_EXTERNAL_URL=http://localhost:50061
+  ```
+</ParamField>
+
+<ParamField path="VITE_METEROID_REST_API_EXTERNAL_URL" type="string">
+  REST API URL accessible from the browser.
+  
+  ```bash
+  VITE_METEROID_REST_API_EXTERNAL_URL=http://localhost:8084
+  ```
+</ParamField>
+
+## Telemetry Configuration
+
+OpenTelemetry tracing and metrics configuration.
+
+<ParamField path="TELEMETRY_TRACING_ENABLED" type="boolean" default="false">
+  Enable distributed tracing with OpenTelemetry.
+  
+  ```bash
+  TELEMETRY_TRACING_ENABLED=true
+  ```
+</ParamField>
+
+<ParamField path="TELEMETRY_METRICS_ENABLED" type="boolean" default="false">
+  Enable metrics collection with OpenTelemetry.
+  
+  ```bash
+  TELEMETRY_METRICS_ENABLED=true
+  ```
+</ParamField>
+
+<ParamField path="TELEMETRY_OTEL_ENDPOINT" type="string" default="http://localhost:4317">
+  OpenTelemetry collector endpoint (gRPC).
+  
+  ```bash
+  TELEMETRY_OTEL_ENDPOINT=http://otel-collector:4317
+  ```
+</ParamField>
+
+## Development Configuration
+
+Settings for local development.
+
+<ParamField path="DEBUG" type="boolean" default="false">
+  Enable debug logging and additional development features.
+  
+  ```bash
+  DEBUG=true
+  ```
+  
+  <Warning>
+    Do not enable in production as it may expose sensitive information.
+  </Warning>
+</ParamField>
+
+## Example Configurations
+
+### Minimal Production Configuration
+
+```bash
+# Platform Secrets
+JWT_SECRET=<generated-secret>
+INTERNAL_API_SECRET=<generated-secret>
+SECRETS_CRYPT_KEY=<32-character-key>
+
+# Database
+DATABASE_URL=postgres://meteroid:password@db:5432/meteroid?sslmode=require
+
+# ClickHouse
+CLICKHOUSE_HTTP_ADDRESS=http://clickhouse:8123
+CLICKHOUSE_TCP_ADDRESS=clickhouse:9000
+CLICKHOUSE_USERNAME=meteroid
+CLICKHOUSE_PASSWORD=<secure-password>
+
+# Kafka
+KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+
+# Public URLs
+METEROID_PUBLIC_URL=https://meteroid.example.com
+METEROID_API_EXTERNAL_URL=https://api.meteroid.example.com
+METEROID_REST_API_EXTERNAL_URL=https://api.meteroid.example.com/api
+
+# Object Storage
+OBJECT_STORE_URI=s3://meteroid-production
+AWS_ACCESS_KEY_ID=<access-key>
+AWS_SECRET_ACCESS_KEY=<secret-key>
+```
+
+### Development Configuration
+
+```bash
+# Use defaults from .env.example
+JWT_SECRET=dev-secret
+INTERNAL_API_SECRET=dev-secret
+SECRETS_CRYPT_KEY=00000000000000000000000000000000
+
+DATABASE_URL=postgres://meteroid:secret@localhost:5432/meteroid?sslmode=disable
+
+CLICKHOUSE_HTTP_ADDRESS=http://localhost:8123
+CLICKHOUSE_TCP_ADDRESS=localhost:9000
+
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+
+OBJECT_STORE_URI=file:///tmp/meteroid/object-store
+
+DEBUG=true
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Docker Compose" icon="docker" href="/installation/docker-compose">
+    Deploy with Docker Compose
+  </Card>
+  <Card title="Kubernetes" icon="kubernetes" href="/installation/kubernetes">
+    Deploy on Kubernetes
+  </Card>
+</CardGroup>

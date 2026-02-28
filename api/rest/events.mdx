@@ -1,0 +1,243 @@
+---
+title: "Events"
+description: "Ingest usage events for metering and billing"
+---
+
+Events track customer usage for metering, billing, and analytics. Usage events are ingested and aggregated based on your billable metrics configuration.
+
+## Ingest Events
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://api.meteroid.com/api/v1/events/ingest" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": [
+      {
+        "event_id": "evt_unique_12345",
+        "code": "api_call",
+        "customer_id": "acme",
+        "timestamp": "2024-01-15T10:30:00Z",
+        "properties": {
+          "endpoint": "/v1/users",
+          "method": "GET"
+        }
+      }
+    ]
+  }'
+```
+</CodeGroup>
+
+**POST** `/api/v1/events/ingest`
+
+Ingest usage events for metering and billing purposes.
+
+### Request Body
+
+<ParamField body="events" type="array" required>
+  Array of event objects to ingest
+  
+  <Expandable title="Event properties">
+    <ParamField body="event_id" type="string" required>
+      Unique event identifier (idempotency key)
+    </ParamField>
+    
+    <ParamField body="code" type="string" required>
+      Event code matching your metric configuration
+    </ParamField>
+    
+    <ParamField body="customer_id" type="string" required>
+      Customer ID or alias
+    </ParamField>
+    
+    <ParamField body="timestamp" type="string" required>
+      Event timestamp (ISO 8601 format)
+    </ParamField>
+    
+    <ParamField body="properties" type="object">
+      Event properties (key-value pairs)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="allow_backfilling" type="boolean">
+  Allow ingesting events with timestamps more than a day in the past. Default: false
+</ParamField>
+
+### Response
+
+<ResponseField name="failures" type="array">
+  Array of failed event ingestions (empty if all succeeded)
+  
+  <Expandable title="Failure properties">
+    <ResponseField name="event_id" type="string">
+      Event ID that failed
+    </ResponseField>
+    
+    <ResponseField name="reason" type="string">
+      Failure reason
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json Success Response
+{
+  "failures": []
+}
+```
+
+```json Partial Failure Response
+{
+  "failures": [
+    {
+      "event_id": "evt_unique_12346",
+      "reason": "Customer not found"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## Event Schema
+
+Events must conform to the following structure:
+
+### Event Properties
+
+<ParamField name="event_id" type="string" required>
+  Unique identifier for the event. Used for idempotency - duplicate event_ids will be ignored.
+</ParamField>
+
+<ParamField name="code" type="string" required>
+  Event code that matches a billable metric's event name in your configuration.
+</ParamField>
+
+<ParamField name="customer_id" type="string" required>
+  The customer's ID or alias in Meteroid.
+</ParamField>
+
+<ParamField name="timestamp" type="string" required>
+  ISO 8601 timestamp when the event occurred (e.g., `2024-01-15T10:30:00Z`).
+</ParamField>
+
+<ParamField name="properties" type="object">
+  Optional key-value pairs with additional event data. Used for:
+  - Metric aggregation (e.g., `amount`, `duration`)
+  - Dimensional segmentation (e.g., `region`, `tier`)
+  - Filtering and analysis
+</ParamField>
+
+## Usage Examples
+
+### API Usage Tracking
+
+```json
+{
+  "events": [
+    {
+      "event_id": "req_abc123",
+      "code": "api_request",
+      "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "properties": {
+        "endpoint": "/v1/users",
+        "method": "POST",
+        "region": "us-east-1"
+      }
+    }
+  ]
+}
+```
+
+### Compute Usage
+
+```json
+{
+  "events": [
+    {
+      "event_id": "compute_xyz789",
+      "code": "compute_hours",
+      "customer_id": "acme",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "properties": {
+        "instance_type": "m5.large",
+        "hours": "2.5",
+        "region": "eu-west-1"
+      }
+    }
+  ]
+}
+```
+
+### Storage Usage
+
+```json
+{
+  "events": [
+    {
+      "event_id": "storage_daily_20240115",
+      "code": "storage_gb",
+      "customer_id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+      "timestamp": "2024-01-15T00:00:00Z",
+      "properties": {
+        "gb_stored": "150",
+        "storage_class": "standard"
+      }
+    }
+  ]
+}
+```
+
+### Batch Ingestion
+
+```json
+{
+  "events": [
+    {
+      "event_id": "evt_001",
+      "code": "api_request",
+      "customer_id": "customer_a",
+      "timestamp": "2024-01-15T10:00:00Z"
+    },
+    {
+      "event_id": "evt_002",
+      "code": "api_request",
+      "customer_id": "customer_a",
+      "timestamp": "2024-01-15T10:05:00Z"
+    },
+    {
+      "event_id": "evt_003",
+      "code": "api_request",
+      "customer_id": "customer_b",
+      "timestamp": "2024-01-15T10:10:00Z"
+    }
+  ]
+}
+```
+
+## Best Practices
+
+### Idempotency
+
+Always use unique `event_id` values. Events with duplicate IDs will be ignored, preventing double-counting.
+
+### Timestamps
+
+By default, events must be within 24 hours. For historical data migration, set `allow_backfilling: true`.
+
+### Batch Processing
+
+Send events in batches for better performance. Consider batching by time interval or event count.
+
+### Error Handling
+
+Check the `failures` array in the response. Retry failed events with exponential backoff.
+
+### Properties
+
+Use consistent property names across events of the same type. Property values are used for:
+- Aggregation (SUM, COUNT, MAX, MIN, etc.)
+- Dimensional analysis and segmentation
+- Filtering in usage queries

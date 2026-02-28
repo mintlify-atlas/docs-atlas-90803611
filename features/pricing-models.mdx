@@ -1,0 +1,242 @@
+---
+title: "Pricing Models"
+description: "Support any pricing strategy with flexible pricing models and components"
+---
+
+Meteroid supports a wide range of pricing models to match your business strategy, from simple subscriptions to complex usage-based and hybrid models.
+
+## Supported Pricing Models
+
+<CardGroup cols={2}>
+  <Card title="Subscription" icon="calendar">
+    Recurring fixed fees charged at regular intervals
+  </Card>
+  <Card title="Usage-based" icon="chart-line">
+    Variable charges based on consumption or activity
+  </Card>
+  <Card title="Per-seat" icon="users">
+    Pricing based on number of users or licenses
+  </Card>
+  <Card title="Hybrid" icon="layer-group">
+    Combination of fixed fees and variable usage charges
+  </Card>
+</CardGroup>
+
+## Fee Types
+
+### Recurring Fees (Rate)
+Fixed charges that repeat each billing cycle.
+
+**Examples**:
+- Platform fee: $50/month
+- Base subscription: $100/month
+- Maintenance fee: $1,200/year
+
+**Configuration**:
+- Billing period: Monthly, quarterly, annual, or custom
+- Billing term: Start/end dates for the fee
+- Advance/arrears: Bill at start or end of period
+
+### Usage-based Fees
+Variable charges calculated from metered usage.
+
+#### Per-Unit Pricing
+Fixed rate per unit consumed:
+```
+$0.10 per API call
+$5.00 per compute hour
+$0.02 per GB stored
+```
+
+#### Tiered Pricing
+Different rates for different usage ranges:
+```
+0-10,000 requests: $0.10 each
+10,001-50,000 requests: $0.08 each
+50,001+ requests: $0.05 each
+```
+
+**Total cost for 25,000 requests**:
+- First 10,000 × $0.10 = $1,000
+- Next 15,000 × $0.08 = $1,200
+- **Total: $2,200**
+
+#### Volume Pricing
+Single rate applied to entire volume based on total usage:
+```
+0-10,000 requests: $0.10 each
+10,001-50,000 requests: $0.08 each (all units)
+50,001+ requests: $0.05 each (all units)
+```
+
+**Total cost for 25,000 requests**:
+- All 25,000 × $0.08 = **$2,000**
+
+#### Package Pricing
+Bundles with overage charges:
+```
+$100 for 10,000 API calls
+$0.015 for each additional call
+```
+
+**Cost for 15,000 calls**:
+- Base package: $100
+- 5,000 overages × $0.015 = $75
+- **Total: $175**
+
+### Slot-based Fees
+Per-seat or per-license pricing with mid-cycle adjustments.
+
+**Examples**:
+- $10 per user per month
+- $50 per workspace per month
+- $25 per concurrent connection
+
+**Features**:
+- Add/remove slots during billing period
+- Automatic proration for mid-cycle changes
+- Minimum commitment slots
+- Committed slots with overage pricing
+
+### Capacity Fees
+Threshold-based pricing with step functions.
+
+**Example**:
+```
+0-1,000 GB: $100/month
+1,001-5,000 GB: $400/month
+5,001-10,000 GB: $800/month
+10,001+ GB: $1,500/month
+```
+
+Billing jumps to next tier when threshold is exceeded.
+
+### One-time Fees
+Non-recurring charges for setup, implementation, or professional services.
+
+**Examples**:
+- Setup fee: $500
+- Implementation: $2,500
+- Custom integration: $5,000
+- Data migration: $1,000
+
+## Complex Pricing Scenarios
+
+### Hybrid Model Example
+
+<Tabs>
+  <Tab title="Plan Structure">
+    **Pro Plan - $299/month**
+    
+    Fixed components:
+    - Platform access: $200/month
+    - Support: $99/month
+    
+    Usage components:
+    - API calls: Tiered pricing
+      - 0-100K: Included
+      - 100K-1M: $0.001 each
+      - 1M+: $0.0005 each
+    - Storage: $0.10 per GB per month
+    - Users: $10 per seat per month
+  </Tab>
+  
+  <Tab title="Invoice Calculation">
+    **Monthly invoice for 250K API calls, 50GB storage, 8 users**:
+    
+    Fixed fees:
+    - Platform: $200
+    - Support: $99
+    
+    Usage fees:
+    - API calls (150K overage): $150
+    - Storage (50 GB): $5
+    - Users (8 seats): $80
+    
+    **Total: $534**
+  </Tab>
+</Tabs>
+
+### Matrix Pricing
+
+Different rates based on multiple dimensions:
+
+```
+API pricing by region and plan:
+
+           | US     | EU     | APAC
+-----------|--------|--------|--------
+Starter    | $0.001 | $0.0012| $0.0015
+Pro        | $0.0008| $0.001 | $0.0012
+Enterprise | $0.0005| $0.0007| $0.0009
+```
+
+## Plan Versioning
+
+Meteroid supports plan versioning for safe pricing changes:
+
+<Steps>
+  <Step title="Draft Version">
+    Create new plan version with updated pricing
+  </Step>
+  <Step title="Test">
+    Preview pricing with test data
+  </Step>
+  <Step title="Publish">
+    Activate new version for new subscriptions
+  </Step>
+  <Step title="Grandfathering">
+    Existing subscriptions remain on old version unless migrated
+  </Step>
+</Steps>
+
+## Discounts and Promotions
+
+### Coupons
+- **Percentage**: 20% off for 3 months
+- **Fixed amount**: $50 off first invoice
+- **Free trial**: 14 days free
+
+### Committed Use Discounts
+Volume discounts for usage commitments:
+```
+Commit to 1M API calls/month: 15% discount
+Commit to 10M API calls/month: 25% discount
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Start Simple">
+    Begin with simple pricing and add complexity as needed:
+    1. Start with fixed subscription fees
+    2. Add usage-based components for key metrics
+    3. Introduce tiers as customer base grows
+    4. Add advanced features like matrix pricing when needed
+  </Accordion>
+  
+  <Accordion title="Price Testing">
+    Test pricing before going live:
+    - Create draft plans and preview invoices
+    - Run calculations with sample data
+    - Verify proration logic with mid-cycle changes
+    - Test edge cases (zero usage, high volume)
+  </Accordion>
+  
+  <Accordion title="Customer Communication">
+    Ensure pricing is clear to customers:
+    - Document pricing models in your terms
+    - Show usage meters in customer dashboards
+    - Send usage alerts before hitting thresholds
+    - Provide detailed invoice breakdowns
+  </Accordion>
+</AccordionGroup>
+
+<CardGroup cols={2}>
+  <Card title="Create Pricing Plans" icon="pencil" href="/guides/creating-plans">
+    Learn how to configure pricing plans
+  </Card>
+  <Card title="Pricing Concepts" icon="book" href="/concepts/pricing-plans">
+    Understand the pricing data model
+  </Card>
+</CardGroup>

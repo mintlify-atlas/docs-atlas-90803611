@@ -1,0 +1,397 @@
+---
+title: "Credit Notes"
+description: "Issue refunds, corrections, and credits to customers"
+---
+
+Credit notes allow you to issue refunds, make corrections to invoices, and provide customer credits in a compliant, auditable way.
+
+## What are Credit Notes?
+
+A credit note is a document that reduces the amount owed by a customer. It's used instead of modifying finalized invoices to maintain a complete audit trail.
+
+<CardGroup cols={2}>
+  <Card title="Refunds" icon="arrow-left">
+    Return money for overpayments or cancellations
+  </Card>
+  <Card title="Corrections" icon="pen-to-square">
+    Fix billing errors without modifying invoices
+  </Card>
+  <Card title="Goodwill Credits" icon="gift">
+    Provide credits for service issues or satisfaction
+  </Card>
+  <Card title="Account Balance" icon="scale-balanced">
+    Apply credits to future invoices automatically
+  </Card>
+</CardGroup>
+
+## Credit Note Lifecycle
+
+<Steps>
+  <Step title="Draft">
+    Credit note created. Can be edited and previewed before finalization.
+  </Step>
+  <Step title="Finalized">
+    Credit note locked and sent to customer. PDF generated.
+  </Step>
+  <Step title="Applied">
+    Credit applied to invoice or customer balance.
+  </Step>
+  <Step title="Refunded">
+    If applicable, refund processed back to customer's payment method.
+  </Step>
+</Steps>
+
+## Creating Credit Notes
+
+### For Invoice Corrections
+
+Credit a specific invoice:
+
+```typescript
+const creditNote = await meteroid.creditNotes.create({
+  invoice_id: "inv_abc123",
+  reason: "Billing error",
+  items: [
+    {
+      description: "Overcharged API usage",
+      amount: 150.00
+    }
+  ]
+});
+```
+
+### For Customer Balance
+
+Add credit to customer account:
+
+```typescript
+const creditNote = await meteroid.creditNotes.create({
+  customer_id: "cust_abc",
+  reason: "Service downtime compensation",
+  amount: 100.00,
+  apply_to_balance: true
+});
+```
+
+## Credit Note Types
+
+### Full Refund
+
+Credit the entire invoice amount:
+
+```typescript
+{
+  "invoice_id": "inv_xyz",
+  "type": "full_refund",
+  "reason": "Subscription canceled within refund window"
+}
+```
+
+**Example**:
+- Original invoice: $299.00
+- Credit note: -$299.00
+- **Net amount owed: $0.00**
+
+### Partial Refund
+
+Credit a portion of an invoice:
+
+```typescript
+{
+  "invoice_id": "inv_xyz",
+  "type": "partial_refund",
+  "amount": 100.00,
+  "reason": "Prorated refund for early cancellation"
+}
+```
+
+**Example**:
+- Original invoice: $299.00
+- Credit note: -$100.00
+- **Net amount owed: $199.00**
+
+### Line Item Credit
+
+Credit specific line items:
+
+```typescript
+{
+  "invoice_id": "inv_xyz",
+  "type": "line_item_credit",
+  "items": [
+    {
+      "line_item_id": "line_456",
+      "description": "Incorrect usage calculation",
+      "amount": 50.00
+    }
+  ]
+}
+```
+
+## Application Methods
+
+### Automatic Balance Application
+
+Credits automatically reduce future invoices:
+
+```typescript
+// Credit note adds $100 to customer balance
+{
+  "customer_id": "cust_abc",
+  "amount": 100.00,
+  "apply_to_balance": true
+}
+
+// Next invoice automatically applies credit
+// Invoice total: $299.00
+// Credit applied: -$100.00
+// Amount due: $199.00
+```
+
+### Refund to Payment Method
+
+Refund money back to original payment method:
+
+```typescript
+{
+  "invoice_id": "inv_xyz",
+  "amount": 150.00,
+  "refund_to_payment_method": true,
+  "payment_intent_id": "pi_stripe_abc"  // Original payment
+}
+```
+
+<Info>
+Refunds via Stripe typically process within 5-10 business days.
+</Info>
+
+### Manual Application
+
+Manually select which invoice(s) to credit:
+
+```typescript
+await meteroid.creditNotes.apply({
+  credit_note_id: "cn_xyz",
+  invoice_ids: ["inv_abc", "inv_def"]
+});
+```
+
+## Common Scenarios
+
+<AccordionGroup>
+  <Accordion title="Cancellation Refund">
+    **Customer cancels mid-cycle and requests refund**:
+    
+    1. Calculate unused time:
+       - Canceled on day 15 of 30-day cycle
+       - 15 days remaining = 50% unused
+    
+    2. Create prorated credit:
+    ```typescript
+    const creditNote = await meteroid.creditNotes.create({
+      invoice_id: lastInvoice.id,
+      amount: lastInvoice.amount * 0.5,
+      reason: "Prorated refund for mid-cycle cancellation",
+      refund_to_payment_method: true
+    });
+    ```
+    
+    3. Process refund to original payment method
+  </Accordion>
+  
+  <Accordion title="Billing Error Correction">
+    **Overcharged customer due to misconfigured pricing**:
+    
+    1. Identify affected invoices and amounts
+    2. Create credit notes for each invoice:
+    ```typescript
+    for (const invoice of affectedInvoices) {
+      await meteroid.creditNotes.create({
+        invoice_id: invoice.id,
+        amount: invoice.overcharge_amount,
+        reason: "Billing error correction - pricing misconfiguration",
+        apply_to_balance: true  // Apply to future invoices
+      });
+    }
+    ```
+    
+    3. Notify customer of correction
+    4. Update pricing configuration
+  </Accordion>
+  
+  <Accordion title="Service Credit">
+    **Downtime or service issues warrant compensation**:
+    
+    1. Determine appropriate credit amount
+    2. Issue as account credit:
+    ```typescript
+    await meteroid.creditNotes.create({
+      customer_id: "cust_affected",
+      amount: 50.00,  // e.g., 1 day's prorated value
+      reason: "Service downtime on 2024-02-15",
+      apply_to_balance: true,
+      notify_customer: true
+    });
+    ```
+    
+    3. Send apology email with explanation
+    4. Credit automatically reduces next invoice
+  </Accordion>
+  
+  <Accordion title="Goodwill Gesture">
+    **Provide credit for customer satisfaction**:
+    
+    ```typescript
+    // One-time goodwill credit
+    await meteroid.creditNotes.create({
+      customer_id: "cust_vip",
+      amount: 100.00,
+      reason: "Thank you for your continued partnership",
+      apply_to_balance: true
+    });
+    ```
+    
+    **Use cases**:
+    - Customer complaint resolution
+    - Loyalty appreciation
+    - Partnership negotiation
+    - Trial extension
+  </Accordion>
+</AccordionGroup>
+
+## PDF Generation
+
+Credit notes generate professional PDFs:
+
+```
+╔════════════════════════════════════════╗
+║         CREDIT NOTE #CN-2024-001      ║
+║                                        ║
+║  Date: February 15, 2024              ║
+║  Related Invoice: INV-2024-123        ║
+║                                        ║
+║  Reason: Prorated refund              ║
+║                                        ║
+║  Line Items:                          ║
+║  Pro Plan (unused portion)    -$150.00║
+║                                        ║
+║  Total Credit:                -$150.00║
+║                                        ║
+║  Applied to customer balance          ║
+╚════════════════════════════════════════╝
+```
+
+## Accounting Impact
+
+Credit notes maintain accounting integrity:
+
+### Double-entry Bookkeeping
+```
+Debit:  Revenue                -$150.00
+Credit: Accounts Receivable    -$150.00
+```
+
+### Customer Balance
+```
+Previous balance:     $500.00
+Credit note:         -$150.00
+────────────────────────────
+New balance:          $350.00
+```
+
+## Compliance
+
+Credit notes ensure regulatory compliance:
+
+- **Audit trail**: Complete history of all adjustments
+- **Immutable invoices**: Never modify finalized invoices
+- **Sequential numbering**: Credit notes have unique IDs
+- **Tax handling**: Proper tax credit calculations
+- **Legal documentation**: PDF records for all credits
+
+## Analytics
+
+Track credit note metrics:
+
+- **Total credits issued**: Volume of refunds/corrections
+- **Credit reasons**: Categorize by reason code
+- **Refund rate**: Percentage of revenue credited
+- **Credit by customer**: Identify frequent credit receivers
+- **Time to resolution**: Speed of credit issuance
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Clear Communication">
+    **Explain credits clearly to customers**:
+    
+    - Include detailed reason in credit note
+    - Send notification email with explanation
+    - Provide context on how/when credit applies
+    - Offer to answer questions
+    
+    Example message:
+    > "We've issued a $150 credit note to your account for the unused portion of your Pro Plan subscription after your cancellation on February 15. This credit will automatically be applied to your next invoice."
+  </Accordion>
+  
+  <Accordion title="Timely Processing">
+    **Issue credits promptly**:
+    
+    - Review credit requests within 24 hours
+    - Issue credit notes within 48 hours
+    - Process refunds within 5 business days
+    - Don't make customers wait for corrections
+  </Accordion>
+  
+  <Accordion title="Documentation">
+    **Maintain detailed records**:
+    
+    - Document reason for every credit
+    - Reference original invoice
+    - Note approval authority
+    - Track refund payment confirmation
+    - Store all correspondence
+  </Accordion>
+  
+  <Accordion title="Approval Workflow">
+    **Implement approval thresholds**:
+    
+    - Credits under $50: Auto-approve
+    - Credits $50-$500: Manager approval
+    - Credits over $500: Director approval
+    - Large credits require documentation
+  </Accordion>
+</AccordionGroup>
+
+## Webhooks
+
+Receive notifications for credit note events:
+
+```typescript
+{
+  "event_type": "credit_note.created",
+  "data": {
+    "credit_note_id": "cn_abc123",
+    "customer_id": "cust_xyz",
+    "amount": 150.00,
+    "reason": "Prorated refund"
+  }
+}
+
+{
+  "event_type": "credit_note.finalized",
+  "data": {
+    "credit_note_id": "cn_abc123",
+    "pdf_url": "https://..."
+  }
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="Invoicing Guide" icon="file-invoice" href="/guides/generating-invoices">
+    Learn about invoice management
+  </Card>
+  <Card title="Credit Notes API" icon="code" href="/api/rest/credit-notes">
+    Explore the credit notes API
+  </Card>
+</CardGroup>

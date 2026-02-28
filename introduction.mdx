@@ -1,0 +1,132 @@
+---
+title: Introduction
+description: Open-source pricing and billing infrastructure for product-led SaaS
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/meteroid-logo-wordmark--light.svg"
+  alt="Meteroid Logo"
+  width="280"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/meteroid-logo-wordmark--dark.svg"
+  alt="Meteroid Logo"
+  width="280"
+/>
+
+# Welcome to Meteroid
+
+Meteroid is a cloud-native pricing and billing infrastructure designed specifically for product-led SaaS companies. It bridges the gap between customer usage and billing, enabling accurate, transparent, and flexible usage-based pricing models.
+
+<img
+  src="/images/meteroid-banner.png"
+  alt="Meteroid Platform"
+  width="640"
+/>
+
+## Why Meteroid?
+
+Meteroid addresses the complexities and limitations of traditional billing systems, particularly for businesses transitioning to usage-based models or product-led-growth principles. It eliminates the gap between customer usage and billing, ensuring accuracy and transparency.
+
+### Key Features
+
+<CardGroup cols={2}>
+  <Card title="Usage-Based Billing" icon="chart-line">
+    Track and bill for any metric - API calls, compute time, storage, or custom events. Real-time metering with ClickHouse for high-throughput workloads.
+  </Card>
+  
+  <Card title="Flexible Pricing Models" icon="sliders">
+    Support for subscription, usage-based, tiered, volume, capacity, and hybrid pricing. Create complex pricing structures with ease.
+  </Card>
+  
+  <Card title="Real-Time Metering" icon="gauge">
+    High-performance event ingestion via Kafka/Redpanda. Store and query usage data efficiently with ClickHouse.
+  </Card>
+  
+  <Card title="Automated Invoicing" icon="file-invoice">
+    Generate accurate invoices automatically based on usage and pricing plans. Support for credits, coupons, and proration.
+  </Card>
+  
+  <Card title="Multi-Tenant Architecture" icon="users">
+    Built-in support for multiple organizations and tenants. Isolate customer data while sharing infrastructure.
+  </Card>
+  
+  <Card title="Open Source & Self-Hosted" icon="code">
+    Full control over your billing infrastructure. Deploy with Docker Compose or Kubernetes.
+  </Card>
+</CardGroup>
+
+## How It Works
+
+Meteroid integrates with your existing systems via a simple API, collecting data on customer usage and interactions. This data fuels the Meteroid billing engine, applying your custom pricing models to generate accurate, timely invoices.
+
+<img
+  src="/images/meteroid-schema-4.webp"
+  alt="Meteroid Architecture"
+  width="640"
+/>
+
+### The Meteroid Platform
+
+1. **Metering**: Ingest usage events via API or Kafka. Track any metric with support for aggregations, dimensions, and filters.
+
+2. **Billing**: Define pricing plans with multiple components. Manage customers, subscriptions, and invoices through the API or web interface.
+
+3. **Invoicing**: Automatically generate invoices based on usage and subscriptions. Handle credits, discounts, taxes, and payment collection.
+
+## Who Is Meteroid For?
+
+Meteroid is designed for startups, SMEs, and enterprises looking to embrace:
+
+- **Usage-based billing** - Charge customers based on actual consumption
+- **Product-led growth** - Enable self-service pricing and checkout
+- **Re-invoicing** - Bill customers for third-party service consumption
+- **Complex pricing** - Multi-dimensional pricing with tiered rates
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get up and running with Meteroid in under 10 minutes
+  </Card>
+  
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    Understand how Meteroid works under the hood
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Explore the complete API documentation
+  </Card>
+  
+  <Card title="Self-Hosting" icon="server" href="/self-hosting">
+    Deploy Meteroid on your own infrastructure
+  </Card>
+</CardGroup>
+
+## Built for Sustainable Growth
+
+Our philosophy is deeply rooted in the principles of open source and open startup culture. We believe in **transparency** and **collaboration** as foundational pillars that foster innovation and build trust.
+
+By choosing Rust as our core technology, we leverage its efficiency, reliability, and safety features, ensuring our platform is built on a solid, secure foundation.
+
+## Community & Support
+
+<CardGroup cols={2}>
+  <Card title="Discord Community" icon="discord" href="https://go.meteroid.com/discord">
+    Join our Discord server for support and discussions
+  </Card>
+  
+  <Card title="GitHub" icon="github" href="https://github.com/meteroid-oss/meteroid">
+    Star the repo and contribute to the project
+  </Card>
+  
+  <Card title="Talk to Us" icon="comments" href="https://meteroid.com/talk-to-us">
+    Schedule a call with our team
+  </Card>
+  
+  <Card title="Twitter" icon="twitter" href="https://twitter.com/meteroidhq">
+    Follow us for updates and news
+  </Card>
+</CardGroup>

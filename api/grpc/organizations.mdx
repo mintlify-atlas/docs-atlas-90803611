@@ -1,0 +1,173 @@
+---
+title: 'Organizations Service'
+description: 'Manage organization and tenant settings'
+---
+
+## Overview
+
+The Organizations service provides organization-level management:
+
+- List and retrieve organizations
+- Create new organizations
+- Access organization and tenant information
+
+## Service Definition
+
+```protobuf
+service OrganizationsService {
+  rpc ListOrganizations(ListOrganizationsRequest) returns (ListOrganizationsResponse) {}
+  rpc GetCurrentOrganizations(GetCurrentOrganizationRequest) returns (GetCurrentOrganizationResponse) {}
+  rpc CreateOrganization(CreateOrganizationRequest) returns (CreateOrganizationResponse) {}
+}
+```
+
+## RPC Methods
+
+### ListOrganizations
+
+Retrieves all organizations accessible to the authenticated user.
+
+**Request:** Empty request (no parameters)
+
+**Response:** Returns list of `Organization` objects.
+
+### GetCurrentOrganizations
+
+Retrieves the current organization context with tenant details.
+
+**Request:** Empty request (no parameters)
+
+**Response:** Returns `OrganizationWithTenant` including associated tenants.
+
+### CreateOrganization
+
+Creates a new organization.
+
+<ParamField path="trade_name" type="string" required>
+  Organization trading name
+</ParamField>
+
+<ParamField path="country" type="string" required>
+  Country code (ISO 3166-1 alpha-2)
+</ParamField>
+
+<ParamField path="legal_name" type="string">
+  Legal entity name
+</ParamField>
+
+<ParamField path="vat_number" type="string">
+  VAT/tax identification number
+</ParamField>
+
+<ParamField path="address_line1" type="string">
+  Address line 1
+</ParamField>
+
+<ParamField path="address_line2" type="string">
+  Address line 2
+</ParamField>
+
+<ParamField path="zip_code" type="string">
+  Postal/ZIP code
+</ParamField>
+
+<ParamField path="state" type="string">
+  State or province
+</ParamField>
+
+<ParamField path="city" type="string">
+  City
+</ParamField>
+
+**Response:** Returns `OrganizationWithTenant` with the created organization and initial tenant.
+
+## Data Models
+
+### Organization
+
+Basic organization information.
+
+<ParamField path="id" type="string">
+  Organization ID
+</ParamField>
+
+<ParamField path="slug" type="string">
+  URL-friendly organization slug
+</ParamField>
+
+<ParamField path="trade_name" type="string">
+  Trading name
+</ParamField>
+
+<ParamField path="created_at" type="string">
+  Creation timestamp
+</ParamField>
+
+### OrganizationWithTenant
+
+Organization with associated tenant information.
+
+<ParamField path="id" type="string">
+  Organization ID
+</ParamField>
+
+<ParamField path="slug" type="string">
+  Organization slug
+</ParamField>
+
+<ParamField path="trade_name" type="string">
+  Trading name
+</ParamField>
+
+<ParamField path="created_at" type="string">
+  Creation timestamp
+</ParamField>
+
+<ParamField path="tenants" type="Tenant[]">
+  List of associated tenants
+</ParamField>
+
+## Organization vs Tenant
+
+Meteroid uses a multi-tenant architecture:
+
+- **Organization**: Top-level entity representing a company or business unit
+- **Tenant**: Isolated environment within an organization (e.g., production, staging, different business lines)
+
+Each organization can have multiple tenants, allowing for:
+- Environment separation (prod/staging/dev)
+- Multi-brand management
+- Department isolation
+
+## Usage Examples
+
+### Create Organization
+
+```protobuf
+CreateOrganizationRequest {
+  trade_name: "Acme Corporation"
+  legal_name: "Acme Corp Ltd."
+  country: "US"
+  vat_number: "US123456789"
+  address_line1: "123 Main Street"
+  city: "San Francisco"
+  state: "CA"
+  zip_code: "94102"
+}
+```
+
+### Get Current Organization Context
+
+```protobuf
+GetCurrentOrganizationRequest {}
+```
+
+Response includes:
+- Organization details
+- All accessible tenants
+- Tenant-specific configurations
+
+## Proto Location
+
+- Service definition: `proto/api/organizations/v1/organizations.proto`
+- Models: `proto/api/organizations/v1/models.proto`

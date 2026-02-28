@@ -1,0 +1,328 @@
+---
+title: "Checkout"
+description: "Self-service checkout for subscription sign-ups and upgrades"
+---
+
+Meteroid's checkout feature enables customers to subscribe to plans, upgrade their subscriptions, and manage payment methods through a self-service flow.
+
+## Checkout Flow
+
+<Steps>
+  <Step title="Generate Checkout Session">
+    Create a checkout session with a plan and optional configuration
+  </Step>
+  <Step title="Customer Completes Checkout">
+    Customer reviews pricing, enters payment details, and confirms
+  </Step>
+  <Step title="Subscription Activated">
+    Subscription is created and activated with the selected plan
+  </Step>
+  <Step title="Confirmation">
+    Customer receives confirmation and access to their subscription
+  </Step>
+</Steps>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="New Subscriptions" icon="sparkles">
+    Let customers sign up and choose their plan
+  </Card>
+  <Card title="Plan Upgrades" icon="arrow-up">
+    Enable self-service upgrades to higher tiers
+  </Card>
+  <Card title="Seat Management" icon="users">
+    Allow customers to add more seats/licenses
+  </Card>
+  <Card title="Payment Updates" icon="credit-card">
+    Collect payment method before trial ends
+  </Card>
+</CardGroup>
+
+## Creating Checkout Sessions
+
+Generate a checkout session via API:
+
+```typescript
+const checkout = await meteroid.checkout.create({
+  customer_id: "cust_abc123",
+  plan_id: "plan_pro_monthly",
+  success_url: "https://yourapp.com/success",
+  cancel_url: "https://yourapp.com/pricing"
+});
+
+// Redirect customer to checkout
+window.location.href = checkout.checkout_url;
+```
+
+## Configuration Options
+
+### Basic Options
+
+<ParamField body="customer_id" type="string" required>
+  ID of the customer checking out
+</ParamField>
+
+<ParamField body="plan_id" type="string" required>
+  ID of the plan to subscribe to
+</ParamField>
+
+<ParamField body="success_url" type="string">
+  URL to redirect after successful checkout
+</ParamField>
+
+<ParamField body="cancel_url" type="string">
+  URL to redirect if customer cancels
+</ParamField>
+
+### Advanced Options
+
+<ParamField body="coupon_code" type="string">
+  Apply a coupon code to the subscription
+</ParamField>
+
+<ParamField body="trial_days" type="integer">
+  Override the plan's default trial period
+</ParamField>
+
+<ParamField body="quantity" type="integer">
+  Initial quantity for slot-based plans (seats, licenses)
+</ParamField>
+
+<ParamField body="currency" type="string">
+  Override the customer's default currency
+</ParamField>
+
+## Checkout Types
+
+### New Subscription Checkout
+
+For customers signing up for the first time:
+
+```typescript
+await meteroid.checkout.create({
+  customer_id: "cust_new_user",
+  plan_id: "plan_starter",
+  trial_days: 14,
+  success_url: "https://app.example.com/onboarding"
+});
+```
+
+### Upgrade Checkout
+
+For existing customers upgrading their plan:
+
+```typescript
+await meteroid.checkout.create({
+  customer_id: "cust_existing",
+  plan_id: "plan_pro",
+  upgrade_from: "sub_current_plan",
+  success_url: "https://app.example.com/dashboard"
+});
+```
+
+<Info>
+Upgrade checkout automatically calculates proration and shows the customer the amount due.
+</Info>
+
+### Seat Upgrade Checkout
+
+For adding more seats to a subscription:
+
+```typescript
+await meteroid.checkout.create({
+  customer_id: "cust_team",
+  subscription_id: "sub_current",
+  additional_quantity: 5,  // Add 5 more seats
+  success_url: "https://app.example.com/team"
+});
+```
+
+## Checkout Page Features
+
+### Plan Summary
+- Plan name and description
+- Pricing breakdown
+- Billing frequency
+- Included features
+
+### Payment Collection
+- Credit card via Stripe
+- Bank transfer details
+- Payment method storage for recurring billing
+
+### Coupon Application
+- Coupon code input field
+- Real-time discount calculation
+- Validation and error messages
+
+### Price Preview
+```
+Pro Plan                           $299.00
+Additional Users (5)                $50.00
+Coupon: LAUNCH20 (-20%)            -$69.80
+                                  ---------
+Subtotal                           $279.20
+Tax (10%)                           $27.92
+                                  ---------
+Total                              $307.12
+
+Billed monthly
+```
+
+## Security
+
+### Token-based Access
+
+Checkout sessions use secure tokens:
+
+```typescript
+const checkout = await meteroid.checkout.create({...});
+// checkout.token is a secure, single-use token
+
+const checkoutUrl = `https://checkout.meteroid.com/${checkout.token}`;
+```
+
+**Token properties**:
+- Single-use: Expires after checkout completes
+- Time-limited: Expires after 24 hours
+- Secure: Cannot be guessed or enumerated
+
+### PCI Compliance
+
+<Note>
+Meteroid uses Stripe for payment processing. Credit card data never touches your servers, ensuring PCI compliance.
+</Note>
+
+## Webhooks
+
+Receive notifications when checkout completes:
+
+```typescript
+// Subscribe to checkout.completed webhook
+{
+  "event_type": "checkout.completed",
+  "data": {
+    "checkout_id": "chk_abc123",
+    "customer_id": "cust_abc",
+    "subscription_id": "sub_xyz789",
+    "plan_id": "plan_pro",
+    "amount_paid": "307.12"
+  }
+}
+```
+
+## Customization
+
+### Branding
+Customize the checkout page:
+- Company logo
+- Brand colors
+- Custom CSS
+- Footer text
+
+### Locale
+Support multiple languages:
+- English
+- Spanish
+- French
+- German
+- Custom translations
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Trial to Paid Conversion">
+    **Collect payment before trial ends**:
+    
+    1. Send reminder 3 days before trial ends
+    2. Link to checkout to add payment method
+    3. Create checkout with `skip_trial: true`
+    4. Auto-convert when payment method is added
+    
+    ```typescript
+    // Pre-trial checkout for payment collection
+    await meteroid.checkout.create({
+      customer_id: "cust_trial",
+      subscription_id: "sub_trial",
+      collect_payment_method: true,
+      skip_immediate_charge: true,
+      success_url: "/trial-extended"
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Upgrade Flow">
+    **Make upgrades frictionless**:
+    
+    1. Show upgrade CTA in your app UI
+    2. Pre-fill checkout with current subscription
+    3. Clearly show proration calculation
+    4. Auto-apply loyalty discounts
+    5. Immediately grant access after upgrade
+    
+    ```typescript
+    // Seamless upgrade checkout
+    const checkout = await meteroid.checkout.create({
+      customer_id: customer.id,
+      plan_id: "plan_enterprise",
+      upgrade_from: customer.current_subscription_id,
+      apply_loyalty_discount: true,
+      success_url: `/dashboard?upgraded=true`
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Coupon Codes">
+    **Strategic coupon usage**:
+    
+    - Pre-apply coupons from URL: `/checkout?coupon=SAVE20`
+    - Show savings prominently
+    - Validate in real-time
+    - Set expiration dates
+    - Limit to first-time customers or specific plans
+    
+    ```typescript
+    // URL parameter pre-fills coupon
+    const urlParams = new URLSearchParams(window.location.search);
+    const coupon = urlParams.get('coupon');
+    
+    await meteroid.checkout.create({
+      customer_id: "cust_new",
+      plan_id: "plan_pro",
+      coupon_code: coupon,  // "SAVE20"
+      success_url: "/welcome"
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+Handle common checkout errors:
+
+```typescript
+try {
+  const checkout = await meteroid.checkout.create({...});
+  window.location.href = checkout.checkout_url;
+} catch (error) {
+  if (error.code === 'invalid_plan') {
+    showError('This plan is not available');
+  } else if (error.code === 'customer_already_subscribed') {
+    showError('You already have an active subscription');
+  } else if (error.code === 'invalid_coupon') {
+    showError('Coupon code is invalid or expired');
+  } else {
+    showError('Checkout failed. Please try again.');
+  }
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="Setup Checkout" icon="rocket" href="/guides/setting-up-checkout">
+    Learn how to implement checkout
+  </Card>
+  <Card title="Checkout API" icon="code" href="/api/rest/checkout-sessions">
+    Explore the checkout API reference
+  </Card>
+</CardGroup>

@@ -1,0 +1,548 @@
+---
+title: "Managing Subscriptions"
+description: "Learn how to create, modify, and manage customer subscriptions in Meteroid"
+---
+
+Subscriptions connect customers to pricing plans and track the ongoing billing relationship. This guide covers the complete subscription lifecycle.
+
+## Overview
+
+A subscription represents:
+- Which **plan** and **version** a customer is on
+- The **billing period** and **cycle**
+- **Component configurations** (slots, usage, etc.)
+- **Add-ons** and **coupons** applied
+- Current **status** and **trial** information
+
+<Steps>
+
+<Step title="Create a subscription">
+
+Create subscriptions using the SubscriptionsService. You'll specify the customer, plan, and configuration.
+
+```protobuf
+message CreateSubscriptionRequest {
+  CreateSubscription subscription = 1;
+}
+
+message CreateSubscription {
+  string plan_version_id = 2;
+  string customer_id = 3;
+  optional uint32 trial_duration = 5;
+  string start_date = 6;
+  optional string end_date = 7;
+  optional uint32 billing_day_anchor = 8;
+  optional uint32 net_terms = 10;
+  CreateSubscriptionComponents components = 14;
+  CreateSubscriptionAddOns add_ons = 15;
+  CreateSubscriptionCoupons coupons = 16;
+  ActivationCondition activation_condition = 17;
+}
+```
+
+**Basic subscription:**
+
+```json
+{
+  "subscription": {
+    "plan_version_id": "ver_01HX...",
+    "customer_id": "cust_01HX...",
+    "start_date": "2024-03-01T00:00:00Z",
+    "billing_day_anchor": 1,
+    "net_terms": 30,
+    "components": {},
+    "add_ons": {},
+    "coupons": {},
+    "activation_condition": "ON_START"
+  }
+}
+```
+
+### Activation conditions
+
+- `ON_START` - Activates immediately on start date
+- `ON_CHECKOUT` - Activates after successful payment
+- `MANUAL` - Requires manual activation via ActivateSubscription
+
+**With trial period:**
+
+```json
+{
+  "subscription": {
+    "plan_version_id": "ver_01HX...",
+    "customer_id": "cust_01HX...",
+    "start_date": "2024-03-01T00:00:00Z",
+    "trial_duration": 14,
+    "activation_condition": "ON_START"
+  }
+}
+```
+
+The `trial_duration` overrides the plan's default trial. Set to `0` to skip trial.
+
+</Step>
+
+<Step title="Configure subscription components">
+
+Customize pricing components when creating the subscription.
+
+### Parameterize slot-based components
+
+Set initial slot counts for per-seat or per-unit pricing:
+
+```json
+{
+  "subscription": {
+    "plan_version_id": "ver_01HX...",
+    "customer_id": "cust_01HX...",
+    "start_date": "2024-03-01T00:00:00Z",
+    "components": {
+      "parameterized_components": [
+        {
+          "component_id": "comp_seats",
+          "initial_slot_count": 5,
+          "billing_period": "MONTHLY"
+        }
+      ]
+    },
+    "activation_condition": "ON_START"
+  }
+}
+```
+
+### Override component pricing
+
+Provide custom pricing for specific customers:
+
+```json
+{
+  "components": {
+    "overridden_components": [
+      {
+        "component_id": "comp_base_fee",
+        "name": "Custom base fee",
+        "price": {
+          "new_price": {
+            "cadence": "MONTHLY",
+            "currency": "USD",
+            "rate_pricing": {
+              "rate": "7500"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+### Add extra components
+
+Include one-off components not in the plan:
+
+```json
+{
+  "components": {
+    "extra_components": [
+      {
+        "name": "Onboarding fee",
+        "product": {
+          "new_product": {
+            "name": "Professional onboarding",
+            "fee_type": "ONE_TIME",
+            "fee_structure": {
+              "one_time": {}
+            }
+          }
+        },
+        "price": {
+          "new_price": {
+            "cadence": "ONE_TIME",
+            "currency": "USD",
+            "one_time_pricing": {
+              "rate": "50000",
+              "quantity": 1
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+### Remove components
+
+Exclude specific plan components:
+
+```json
+{
+  "components": {
+    "remove_components": ["comp_premium_feature"]
+  }
+}
+```
+
+</Step>
+
+<Step title="Add subscription add-ons">
+
+Add-ons are reusable components that can be attached to subscriptions.
+
+```json
+{
+  "subscription": {
+    "plan_version_id": "ver_01HX...",
+    "customer_id": "cust_01HX...",
+    "start_date": "2024-03-01T00:00:00Z",
+    "add_ons": {
+      "add_ons": [
+        {
+          "add_on_id": "addon_priority_support",
+          "quantity": 1,
+          "parameterization": {
+            "billing_period": "MONTHLY"
+          }
+        },
+        {
+          "add_on_id": "addon_extra_storage",
+          "quantity": 3,
+          "price_override": {
+            "name": "Bulk storage discount",
+            "price_entry": {
+              "new_price": {
+                "cadence": "MONTHLY",
+                "currency": "USD",
+                "rate_pricing": {
+                  "rate": "1500"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "activation_condition": "ON_START"
+  }
+}
+```
+
+</Step>
+
+<Step title="Apply coupons">
+
+Apply discount coupons at subscription creation:
+
+```json
+{
+  "subscription": {
+    "plan_version_id": "ver_01HX...",
+    "customer_id": "cust_01HX...",
+    "start_date": "2024-03-01T00:00:00Z",
+    "coupons": {
+      "coupons": [
+        {
+          "coupon_id": "coupon_launch_50off"
+        }
+      ]
+    },
+    "activation_condition": "ON_START"
+  }
+}
+```
+
+Coupons are validated at creation time and applied to invoices according to their configuration.
+
+</Step>
+
+<Step title="Update subscription slots">
+
+For slot-based components (per-seat pricing), customers can add or remove units during the subscription.
+
+```protobuf
+message UpdateSlotsRequest {
+  string subscription_id = 1;
+  string price_component_id = 2;
+  int32 delta = 3;
+  optional SlotUpgradeBillingMode billing_mode = 4;
+}
+```
+
+**Add 3 seats:**
+
+```json
+{
+  "subscription_id": "sub_01HX...",
+  "price_component_id": "comp_seats",
+  "delta": 3,
+  "billing_mode": "SLOT_OPTIMISTIC"
+}
+```
+
+**Remove 2 seats:**
+
+```json
+{
+  "subscription_id": "sub_01HX...",
+  "price_component_id": "comp_seats",
+  "delta": -2
+}
+```
+
+### Billing modes for slot upgrades
+
+- `SLOT_OPTIMISTIC` - Slots activate immediately, invoice created after (trust-based)
+- `SLOT_ON_CHECKOUT` - Payment attempted first, slots activate if payment succeeds
+- `SLOT_ON_INVOICE_PAID` - Invoice created, slots activate when invoice is paid
+
+**Preview slot changes:**
+
+Before applying, preview the proration and costs:
+
+```json
+{
+  "subscription_id": "sub_01HX...",
+  "price_component_id": "comp_seats",
+  "delta": 5
+}
+```
+
+Response shows:
+```json
+{
+  "current_slots": 10,
+  "new_slots": 15,
+  "delta": 5,
+  "unit": "seat",
+  "unit_rate": "1500",
+  "prorated_amount": "3750",
+  "full_period_amount": "22500",
+  "days_remaining": 15,
+  "days_total": 30,
+  "effective_at": "2024-02-28T15:30:00Z",
+  "current_period_end": "2024-03-15T00:00:00Z",
+  "next_invoice_delta": "3750"
+}
+```
+
+</Step>
+
+<Step title="Schedule plan changes">
+
+Upgrade or downgrade customers to different plans:
+
+```protobuf
+message SchedulePlanChangeRequest {
+  string subscription_id = 1;
+  string new_plan_version_id = 2;
+  repeated PlanChangeComponentParameterization parameterized_components = 3;
+}
+```
+
+**Example:**
+
+```json
+{
+  "subscription_id": "sub_01HX...",
+  "new_plan_version_id": "ver_enterprise_01HY...",
+  "parameterized_components": [
+    {
+      "component_id": "comp_enterprise_seats",
+      "billing_period": "YEARLY",
+      "initial_slot_count": 20
+    }
+  ]
+}
+```
+
+Plan changes take effect at the next billing period by default.
+
+**Preview plan changes:**
+
+```protobuf
+message PreviewPlanChangeRequest {
+  string subscription_id = 1;
+  string new_plan_version_id = 2;
+  repeated PlanChangeComponentParameterization parameterized_components = 3;
+}
+```
+
+The preview shows which components are:
+- **Matched** - Exist in both plans (shows pricing changes)
+- **Added** - New in the target plan
+- **Removed** - Only in current plan
+
+</Step>
+
+<Step title="Cancel subscriptions">
+
+Cancel subscriptions immediately or at period end:
+
+```protobuf
+message CancelSubscriptionRequest {
+  string subscription_id = 1;
+  optional string reason = 2;
+  oneof effective_at {
+    Immediate immediate = 3;
+    BillingPeriodEnd billing_period_end = 4;
+    string date = 5;
+  }
+}
+```
+
+**Cancel immediately:**
+
+```json
+{
+  "subscription_id": "sub_01HX...",
+  "reason": "Customer request",
+  "immediate": {}
+}
+```
+
+**Cancel at period end:**
+
+```json
+{
+  "subscription_id": "sub_01HX...",
+  "reason": "Downgrade to free tier",
+  "billing_period_end": {}
+}
+```
+
+**Cancel on specific date:**
+
+```json
+{
+  "subscription_id": "sub_01HX...",
+  "date": "2024-06-01T00:00:00Z"
+}
+```
+
+</Step>
+
+</Steps>
+
+## Subscription statuses
+
+Subscriptions move through different states:
+
+- `PENDING` - Created but not yet started
+- `TRIALING` - In trial period
+- `ACTIVE` - Active and billing
+- `TRIAL_EXPIRED` - Trial ended, awaiting payment/activation
+- `CANCELED` - Canceled by customer or admin
+- `ENDED` - Reached end date or completed billing cycles
+- `ERRORED` - Billing or processing error
+
+## Advanced features
+
+### Payment method configuration
+
+Control which payment methods are available:
+
+```json
+{
+  "subscription": {
+    "plan_version_id": "ver_01HX...",
+    "customer_id": "cust_01HX...",
+    "start_date": "2024-03-01T00:00:00Z",
+    "payment_methods_config": {
+      "online": {
+        "config": {
+          "card": { "enabled": true },
+          "direct_debit": { "enabled": true }
+        }
+      }
+    },
+    "activation_condition": "ON_START"
+  }
+}
+```
+
+Options:
+- `online` - Card and direct debit payments
+- `bank_transfer` - Manual bank transfers
+- `external` - Payment handled outside Meteroid
+
+### Migration mode
+
+When migrating existing subscriptions with past start dates:
+
+```json
+{
+  "subscription": {
+    "plan_version_id": "ver_01HX...",
+    "customer_id": "cust_01HX...",
+    "start_date": "2024-01-01T00:00:00Z",
+    "skip_past_invoices": true,
+    "activation_condition": "ON_START"
+  }
+}
+```
+
+This sets the subscription to the current billing period without creating invoices for past cycles.
+
+### Invoice customization
+
+```json
+{
+  "subscription": {
+    "plan_version_id": "ver_01HX...",
+    "customer_id": "cust_01HX...",
+    "start_date": "2024-03-01T00:00:00Z",
+    "invoice_memo": "Annual contract - Net 60",
+    "purchase_order": "PO-2024-0392",
+    "net_terms": 60,
+    "auto_advance_invoices": true,
+    "charge_automatically": true,
+    "activation_condition": "ON_START"
+  }
+}
+```
+
+- `invoice_memo` - Appears on invoices
+- `purchase_order` - PO number for enterprise customers
+- `auto_advance_invoices` - Auto-finalize draft invoices
+- `charge_automatically` - Auto-charge when invoice is due
+
+## Best practices
+
+<AccordionGroup>
+
+<Accordion title="Set billing day anchors strategically">
+Align billing dates with customer preferences (1st of month is common). For mid-month starts, proration happens automatically.
+</Accordion>
+
+<Accordion title="Use appropriate activation conditions">
+B2B: Use ON_START for trusted customers. B2C: Use ON_CHECKOUT to ensure payment before access.
+</Accordion>
+
+<Accordion title="Preview before changing">
+Always preview plan changes and slot updates before applying. Show customers the impact before confirmation.
+</Accordion>
+
+<Accordion title="Track cancellation reasons">
+Collect and analyze cancellation reasons to identify churn patterns and product improvements.
+</Accordion>
+
+<Accordion title="Handle trial expirations gracefully">
+Monitor TRIAL_EXPIRED subscriptions and prompt customers to add payment or activate.
+</Accordion>
+
+<Accordion title="Use coupons for promotions">
+Reusable coupons are better than manual discounts. They're auditable and easier to manage.
+</Accordion>
+
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Creating Plans" icon="layer-group" href="/guides/creating-plans">
+    Design plans that customers will subscribe to
+  </Card>
+  <Card title="Generating Invoices" icon="file-invoice" href="/guides/generating-invoices">
+    Understand how subscriptions generate invoices
+  </Card>
+</CardGroup>

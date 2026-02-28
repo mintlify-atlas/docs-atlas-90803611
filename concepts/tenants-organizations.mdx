@@ -1,0 +1,170 @@
+---
+title: Tenants & Organizations
+description: Understanding Meteroid's multi-tenancy architecture
+icon: building
+---
+
+## Overview
+
+Meteroid uses a hierarchical multi-tenancy model with **Organizations** at the top level and **Tenants** as isolated environments within each organization. This architecture enables complete data isolation while supporting multiple environments (production, staging, development) under a single organizational umbrella.
+
+## Organizations
+
+An **Organization** represents your company or business entity in Meteroid. Each organization can contain multiple tenants for different purposes.
+
+### Organization Structure
+
+Based on the data model at `modules/meteroid/proto/api/organizations/v1/models.proto:7-12`:
+
+```protobuf
+message Organization {
+  string id = 1;
+  string slug = 2;              // URL-friendly identifier
+  string trade_name = 3;        // Business name
+  string created_at = 4;
+}
+```
+
+### Key Properties
+
+- **ID**: Unique UUID for the organization
+- **Slug**: URL-safe identifier used in API endpoints and URLs
+- **Trade Name**: Your business or company name
+- **Created At**: Timestamp of organization creation
+
+## Tenants
+
+A **Tenant** is an isolated environment within an organization. Tenants provide complete data separation for different environments or use cases.
+
+### Tenant Structure
+
+Based on the data model at `modules/meteroid/proto/api/tenants/v1/models.proto:5-12`:
+
+```protobuf
+message Tenant {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  string reporting_currency = 4;
+  TenantEnvironmentEnum environment = 5;
+  bool disable_emails = 6;
+}
+```
+
+### Environment Types
+
+Tenants support multiple environment types at `modules/meteroid/proto/api/tenants/v1/models.proto:23-30`:
+
+```protobuf
+enum TenantEnvironmentEnum {
+  PRODUCTION = 0;
+  STAGING = 1;
+  QA = 2;
+  DEVELOPMENT = 3;
+  SANDBOX = 4;
+  DEMO = 5;
+}
+```
+
+### Tenant Configuration
+
+| Property | Description | Example |
+|----------|-------------|----------|
+| `id` | Unique tenant identifier | `550e8400-e29b-41d4-a716-446655440000` |
+| `name` | Human-readable tenant name | `Acme Production` |
+| `slug` | URL-safe identifier | `acme-prod` |
+| `reporting_currency` | Default currency for reports | `USD`, `EUR`, `GBP` |
+| `environment` | Environment type | `PRODUCTION`, `STAGING` |
+| `disable_emails` | Whether to suppress email notifications | `false` |
+
+## Data Isolation
+
+All core entities in Meteroid are scoped to a specific tenant:
+
+- **Customers**: Each customer belongs to one tenant
+- **Plans**: Pricing plans are tenant-specific
+- **Subscriptions**: Linked to customers within a tenant
+- **Invoices**: Generated within tenant boundaries
+- **Metrics**: Usage metrics are isolated per tenant
+
+This is enforced at the database level (see `modules/meteroid/crates/diesel-models/src/schema.rs:1025-1035`):
+
+```rust
+tenant (id) {
+    id -> Uuid,
+    name -> Text,
+    slug -> Text,
+    organization_id -> Uuid,  // Links to parent organization
+    reporting_currency -> Text,
+    environment -> TenantEnvironmentEnum,
+    available_currencies -> Array<Nullable<Text>>,
+    disable_emails -> Bool,
+}
+```
+
+## Multi-Environment Strategy
+
+A typical organization structure might look like:
+
+```
+Organization: Acme Corp
+├── Tenant: acme-production (PRODUCTION)
+│   ├── Customers: Real customers
+│   ├── Plans: Production pricing
+│   └── Currency: USD
+├── Tenant: acme-staging (STAGING)
+│   ├── Customers: Test customers
+│   ├── Plans: Same as production
+│   └── Currency: USD
+└── Tenant: acme-sandbox (SANDBOX)
+    ├── Customers: Demo data
+    ├── Plans: Experimental pricing
+    └── Currency: USD
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use separate tenants for each environment">
+    Never mix production and test data in the same tenant. Create separate tenants for production, staging, and development.
+  </Accordion>
+  
+  <Accordion title="Consistent naming conventions">
+    Use clear, consistent naming for tenant slugs: `{company}-{environment}` (e.g., `acme-prod`, `acme-staging`)
+  </Accordion>
+  
+  <Accordion title="Disable emails in non-production">
+    Set `disable_emails: true` for all non-production tenants to prevent accidental notifications to test customers.
+  </Accordion>
+  
+  <Accordion title="Match currencies to your business">
+    Set the `reporting_currency` to your primary business currency. Configure `available_currencies` for multi-currency support.
+  </Accordion>
+</AccordionGroup>
+
+## API Usage
+
+All API requests require tenant context. The tenant is typically specified via:
+
+- **API tokens**: Scoped to a specific tenant
+- **Headers**: `X-Tenant-ID` or similar tenant identifier
+- **URL path**: `/api/v1/tenants/{tenant_id}/...`
+
+Example API call:
+
+```bash
+curl -X GET "https://api.meteroid.com/api/v1/customers" \
+  -H "Authorization: Bearer {api_token}" \
+  -H "X-Tenant-ID: 550e8400-e29b-41d4-a716-446655440000"
+```
+
+## Related Concepts
+
+<CardGroup cols={2}>
+  <Card title="Customers" icon="users" href="/concepts/customers">
+    Learn how customers are managed within tenants
+  </Card>
+  <Card title="Pricing Plans" icon="tags" href="/concepts/pricing-plans">
+    Understand tenant-specific pricing configurations
+  </Card>
+</CardGroup>

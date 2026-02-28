@@ -1,0 +1,464 @@
+---
+title: "Customers"
+description: "Manage customer records and billing information"
+---
+
+Customers represent the entities that subscribe to your plans and receive invoices.
+
+## List Customers
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/customers?page=0&per_page=20" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/customers`
+
+List customers with optional pagination and search filtering.
+
+### Query Parameters
+
+<ParamField query="page" type="integer">
+  Page number (0-indexed)
+</ParamField>
+
+<ParamField query="per_page" type="integer">
+  Number of items per page (1-100)
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search by customer name or alias
+</ParamField>
+
+<ParamField query="archived" type="boolean">
+  Filter by archived status
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="array">
+  Array of customer objects
+  
+  <Expandable title="Customer properties">
+    <ResponseField name="id" type="string" required>
+      Customer ID
+    </ResponseField>
+    
+    <ResponseField name="name" type="string" required>
+      Customer name
+    </ResponseField>
+    
+    <ResponseField name="alias" type="string">
+      Customer alias
+    </ResponseField>
+    
+    <ResponseField name="invoicing_emails" type="array" required>
+      Email addresses for invoices
+    </ResponseField>
+    
+    <ResponseField name="currency" type="string" required>
+      Currency code (e.g., USD, EUR)
+    </ResponseField>
+    
+    <ResponseField name="billing_address" type="object">
+      Billing address details
+    </ResponseField>
+    
+    <ResponseField name="vat_number" type="string">
+      VAT/Tax identification number
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination_meta" type="object">
+  Pagination metadata
+  
+  <Expandable title="properties">
+    <ResponseField name="page" type="integer">
+      Current page
+    </ResponseField>
+    
+    <ResponseField name="per_page" type="integer">
+      Items per page
+    </ResponseField>
+    
+    <ResponseField name="total_items" type="integer">
+      Total number of items
+    </ResponseField>
+    
+    <ResponseField name="total_pages" type="integer">
+      Total number of pages
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "data": [
+    {
+      "id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+      "name": "Acme Corporation",
+      "alias": "acme",
+      "invoicing_emails": ["billing@acme.com"],
+      "currency": "USD",
+      "billing_address": {
+        "line1": "123 Main St",
+        "city": "San Francisco",
+        "state": "CA",
+        "zip_code": "94105",
+        "country": "US"
+      },
+      "invoicing_entity_id": "ive_7n42DGM5Tflk9n8mt7Fhc7",
+      "custom_taxes": []
+    }
+  ],
+  "pagination_meta": {
+    "page": 0,
+    "per_page": 20,
+    "total_items": 1,
+    "total_pages": 1
+  }
+}
+```
+</ResponseExample>
+
+## Create Customer
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://api.meteroid.com/api/v1/customers" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Corporation",
+    "alias": "acme",
+    "invoicing_emails": ["billing@acme.com"],
+    "currency": "USD",
+    "custom_taxes": []
+  }'
+```
+</CodeGroup>
+
+**POST** `/api/v1/customers`
+
+Create a new customer.
+
+### Request Body
+
+<ParamField body="name" type="string" required>
+  Customer name
+</ParamField>
+
+<ParamField body="invoicing_emails" type="array" required>
+  Array of email addresses for invoicing
+</ParamField>
+
+<ParamField body="currency" type="string" required>
+  Currency code (e.g., USD, EUR)
+</ParamField>
+
+<ParamField body="custom_taxes" type="array" required>
+  Array of custom tax rates
+</ParamField>
+
+<ParamField body="alias" type="string">
+  Unique customer alias
+</ParamField>
+
+<ParamField body="billing_email" type="string">
+  Primary billing email
+</ParamField>
+
+<ParamField body="billing_address" type="object">
+  Billing address
+  
+  <Expandable title="properties">
+    <ParamField body="line1" type="string">
+      Street address line 1
+    </ParamField>
+    
+    <ParamField body="line2" type="string">
+      Street address line 2
+    </ParamField>
+    
+    <ParamField body="city" type="string">
+      City
+    </ParamField>
+    
+    <ParamField body="state" type="string">
+      State/Province
+    </ParamField>
+    
+    <ParamField body="zip_code" type="string">
+      Postal/ZIP code
+    </ParamField>
+    
+    <ParamField body="country" type="string">
+      Country code (ISO 3166-1 alpha-2)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="shipping_address" type="object">
+  Shipping address details
+</ParamField>
+
+<ParamField body="vat_number" type="string">
+  VAT/Tax identification number
+</ParamField>
+
+<ParamField body="phone" type="string">
+  Phone number
+</ParamField>
+
+<ParamField body="invoicing_entity_id" type="string">
+  Invoicing entity ID
+</ParamField>
+
+<ParamField body="is_tax_exempt" type="boolean">
+  Whether the customer is tax exempt
+</ParamField>
+
+### Response
+
+<ResponseField name="customer" type="object">
+  Created customer object
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+  "name": "Acme Corporation",
+  "alias": "acme",
+  "invoicing_emails": ["billing@acme.com"],
+  "currency": "USD",
+  "billing_address": null,
+  "invoicing_entity_id": "ive_7n42DGM5Tflk9n8mt7Fhc7",
+  "custom_taxes": []
+}
+```
+</ResponseExample>
+
+## Get Customer
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/customers/{id_or_alias}" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**GET** `/api/v1/customers/{id_or_alias}`
+
+Retrieve a single customer by ID or alias.
+
+### Path Parameters
+
+<ParamField path="id_or_alias" type="string" required>
+  Customer ID or alias
+</ParamField>
+
+### Response
+
+<ResponseField name="customer" type="object">
+  Customer details
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "id": "cus_7n42DGM5Tflk9n8mt7Fhc7",
+  "name": "Acme Corporation",
+  "alias": "acme",
+  "invoicing_emails": ["billing@acme.com"],
+  "currency": "USD",
+  "billing_address": {
+    "line1": "123 Main St",
+    "city": "San Francisco",
+    "state": "CA",
+    "zip_code": "94105",
+    "country": "US"
+  },
+  "invoicing_entity_id": "ive_7n42DGM5Tflk9n8mt7Fhc7",
+  "custom_taxes": []
+}
+```
+</ResponseExample>
+
+## Update Customer
+
+<CodeGroup>
+```bash cURL
+curl -X PUT "https://api.meteroid.com/api/v1/customers/{id_or_alias}" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Corporation Inc.",
+    "invoicing_emails": ["billing@acme.com"],
+    "currency": "USD",
+    "invoicing_entity_id": "ive_7n42DGM5Tflk9n8mt7Fhc7",
+    "custom_taxes": []
+  }'
+```
+</CodeGroup>
+
+**PUT** `/api/v1/customers/{id_or_alias}`
+
+Update a customer. All fields are required.
+
+### Path Parameters
+
+<ParamField path="id_or_alias" type="string" required>
+  Customer ID or alias
+</ParamField>
+
+### Request Body
+
+All fields from the create customer request are required.
+
+### Response
+
+<ResponseField name="customer" type="object">
+  Updated customer object
+</ResponseField>
+
+## Patch Customer
+
+<CodeGroup>
+```bash cURL
+curl -X PATCH "https://api.meteroid.com/api/v1/customers/{id_or_alias}" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Corporation Inc."
+  }'
+```
+</CodeGroup>
+
+**PATCH** `/api/v1/customers/{id_or_alias}`
+
+Partially update a customer. Only provided fields will be updated.
+
+### Path Parameters
+
+<ParamField path="id_or_alias" type="string" required>
+  Customer ID or alias
+</ParamField>
+
+### Request Body
+
+Any customer field can be included. Only provided fields are updated.
+
+<ParamField body="name" type="string">
+  Customer name
+</ParamField>
+
+<ParamField body="alias" type="string">
+  Customer alias
+</ParamField>
+
+<ParamField body="invoicing_emails" type="array">
+  Email addresses for invoicing
+</ParamField>
+
+<ParamField body="currency" type="string">
+  Currency code
+</ParamField>
+
+<ParamField body="billing_address" type="object">
+  Billing address
+</ParamField>
+
+### Response
+
+<ResponseField name="customer" type="object">
+  Updated customer object
+</ResponseField>
+
+## Archive Customer
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE "https://api.meteroid.com/api/v1/customers/{id_or_alias}" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**DELETE** `/api/v1/customers/{id_or_alias}`
+
+Archive a customer. You must terminate all active subscriptions before archiving.
+
+### Path Parameters
+
+<ParamField path="id_or_alias" type="string" required>
+  Customer ID or alias
+</ParamField>
+
+### Response
+
+Returns `204 No Content` on success.
+
+## Unarchive Customer
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://api.meteroid.com/api/v1/customers/{id_or_alias}/unarchive" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**POST** `/api/v1/customers/{id_or_alias}/unarchive`
+
+Restore an archived customer.
+
+### Path Parameters
+
+<ParamField path="id_or_alias" type="string" required>
+  Customer ID or alias
+</ParamField>
+
+### Response
+
+Returns `204 No Content` on success.
+
+## Generate Portal Token
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://api.meteroid.com/api/v1/customers/{id_or_alias}/portal-token" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+</CodeGroup>
+
+**POST** `/api/v1/customers/{id_or_alias}/portal-token`
+
+Generate a JWT token that grants access to the customer portal for accessing invoices, payment methods, and other portal features.
+
+### Path Parameters
+
+<ParamField path="id_or_alias" type="string" required>
+  Customer ID or alias
+</ParamField>
+
+### Response
+
+<ResponseField name="token" type="string">
+  JWT token for portal access
+</ResponseField>
+
+<ResponseField name="portal_url" type="string">
+  Base URL of the customer portal
+</ResponseField>
+
+<ResponseExample>
+```json Response
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "portal_url": "https://portal.meteroid.com"
+}
+```
+</ResponseExample>

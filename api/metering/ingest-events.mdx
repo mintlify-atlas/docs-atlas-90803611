@@ -1,0 +1,533 @@
+---
+title: 'Event Ingestion API'
+description: 'Send usage events to Meteroid for metering and billing'
+---
+
+## Overview
+
+The Event Ingestion API allows you to send usage events to Meteroid's metering service. Events are processed asynchronously, validated, and stored for aggregation and querying.
+
+## Event Schema
+
+### Event Message
+
+```protobuf
+message Event {
+  string id = 1;
+  string code = 2;
+  oneof customer_id {
+    string meteroid_customer_id = 3;
+    string external_customer_alias = 4;
+  }
+  string timestamp = 5;  // RFC3339 format
+  map<string, string> properties = 6;
+}
+```
+
+### Field Descriptions
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Unique event identifier (idempotency key) |
+| `code` | string | Yes | Billable metric code (e.g., `api_calls`, `storage_gb`) |
+| `meteroid_customer_id` | string | One of | Meteroid internal customer ID |
+| `external_customer_alias` | string | One of | External customer identifier |
+| `timestamp` | string | Yes | RFC3339 formatted timestamp (e.g., `2024-01-15T10:30:00Z`) |
+| `properties` | map | No | Key-value pairs for dimensions and values |
+
+### Properties Map
+
+The `properties` field is a flexible key-value store for:
+
+- **Values to aggregate**: Numeric values for SUM, AVG, MIN, MAX aggregations
+- **Dimensions**: Grouping attributes like region, instance_type, environment
+- **Metadata**: Additional context for debugging and filtering
+
+**Example properties:**
+```json
+{
+  "value": "150.5",
+  "region": "us-east-1",
+  "instance_type": "t3.medium",
+  "environment": "production",
+  "request_id": "req_123xyz"
+}
+```
+
+<Note>
+All property values must be strings. Numeric values should be stringified (e.g., `"123.45"`).
+</Note>
+
+## Ingest Request
+
+### Request Message
+
+```protobuf
+message IngestRequest {
+  repeated Event events = 1;
+  bool allow_backfilling = 2;
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `events` | Event[] | Array of events to ingest (batch up to 1000) |
+| `allow_backfilling` | bool | Allow events with timestamps beyond the grace period (default: false) |
+
+### Response Message
+
+```protobuf
+message IngestResponse {
+  repeated IngestFailure failures = 1;
+}
+
+message IngestFailure {
+  string event_id = 1;
+  string reason = 2;
+}
+```
+
+The response contains only failed events. If `failures` is empty, all events were successfully ingested.
+
+## Usage Examples
+
+### Single Event
+
+<CodeGroup>
+
+```typescript TypeScript
+import * as grpc from '@grpc/grpc-js';
+import { EventsServiceClient } from './generated/metering';
+
+const client = new EventsServiceClient(
+  'metering.meteroid.com:443',
+  grpc.credentials.createSsl()
+);
+
+const metadata = new grpc.Metadata();
+metadata.add('authorization', 'Bearer YOUR_API_KEY');
+
+const request = {
+  events: [
+    {
+      id: 'evt_' + Date.now(),
+      code: 'api_calls',
+      meteroid_customer_id: 'cus_123',
+      timestamp: new Date().toISOString(),
+      properties: {
+        endpoint: '/api/users',
+        method: 'GET',
+        status_code: '200'
+      }
+    }
+  ],
+  allow_backfilling: false
+};
+
+client.ingest(request, metadata, (error, response) => {
+  if (error) {
+    console.error('Ingestion failed:', error);
+    return;
+  }
+  
+  if (response.failures.length > 0) {
+    console.log('Some events failed:', response.failures);
+  } else {
+    console.log('All events ingested successfully');
+  }
+});
+```
+
+```python Python
+import grpc
+from datetime import datetime
+from generated import metering_pb2, metering_pb2_grpc
+
+channel = grpc.secure_channel(
+    'metering.meteroid.com:443',
+    grpc.ssl_channel_credentials()
+)
+stub = metering_pb2_grpc.EventsServiceStub(channel)
+
+metadata = [('authorization', 'Bearer YOUR_API_KEY')]
+
+request = metering_pb2.IngestRequest(
+    events=[
+        metering_pb2.Event(
+            id=f'evt_{int(datetime.now().timestamp())}',
+            code='api_calls',
+            meteroid_customer_id='cus_123',
+            timestamp=datetime.utcnow().isoformat() + 'Z',
+            properties={
+                'endpoint': '/api/users',
+                'method': 'GET',
+                'status_code': '200'
+            }
+        )
+    ],
+    allow_backfilling=False
+)
+
+response = stub.Ingest(request, metadata=metadata)
+
+if len(response.failures) > 0:
+    print(f'Some events failed: {response.failures}')
+else:
+    print('All events ingested successfully')
+```
+
+```go Go
+import (
+    "context"
+    "time"
+    "google.golang.org/grpc"
+    "google.golang.org/grpc/metadata"
+    pb "your-module/generated/metering"
+)
+
+conn, err := grpc.Dial(
+    "metering.meteroid.com:443",
+    grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{})),
+)
+if err != nil {
+    log.Fatal(err)
+}
+defer conn.Close()
+
+client := pb.NewEventsServiceClient(conn)
+
+ctx := metadata.AppendToOutgoingContext(
+    context.Background(),
+    "authorization", "Bearer YOUR_API_KEY",
+)
+
+request := &pb.IngestRequest{
+    Events: []*pb.Event{
+        {
+            Id:                   fmt.Sprintf("evt_%d", time.Now().Unix()),
+            Code:                 "api_calls",
+            MeteroidCustomerId:   "cus_123",
+            Timestamp:            time.Now().UTC().Format(time.RFC3339),
+            Properties: map[string]string{
+                "endpoint":    "/api/users",
+                "method":      "GET",
+                "status_code": "200",
+            },
+        },
+    },
+    AllowBackfilling: false,
+}
+
+response, err := client.Ingest(ctx, request)
+if err != nil {
+    log.Fatal(err)
+}
+
+if len(response.Failures) > 0 {
+    log.Printf("Some events failed: %v", response.Failures)
+} else {
+    log.Println("All events ingested successfully")
+}
+```
+
+</CodeGroup>
+
+### Batch Events
+
+<CodeGroup>
+
+```typescript TypeScript
+const batchRequest = {
+  events: [
+    {
+      id: 'evt_001',
+      code: 'compute_seconds',
+      external_customer_alias: 'customer@example.com',
+      timestamp: '2024-01-15T10:00:00Z',
+      properties: {
+        value: '3600',
+        instance_type: 't3.large',
+        region: 'us-east-1'
+      }
+    },
+    {
+      id: 'evt_002',
+      code: 'compute_seconds',
+      external_customer_alias: 'customer@example.com',
+      timestamp: '2024-01-15T11:00:00Z',
+      properties: {
+        value: '3600',
+        instance_type: 't3.medium',
+        region: 'us-west-2'
+      }
+    },
+    {
+      id: 'evt_003',
+      code: 'data_transfer_gb',
+      external_customer_alias: 'customer@example.com',
+      timestamp: '2024-01-15T10:30:00Z',
+      properties: {
+        value: '125.5',
+        direction: 'egress',
+        region: 'us-east-1'
+      }
+    }
+  ],
+  allow_backfilling: false
+};
+
+client.ingest(batchRequest, metadata, (error, response) => {
+  if (error) {
+    console.error('Batch ingestion failed:', error);
+    return;
+  }
+  
+  console.log(`Ingested ${batchRequest.events.length - response.failures.length} events`);
+  
+  if (response.failures.length > 0) {
+    response.failures.forEach(failure => {
+      console.error(`Event ${failure.event_id} failed: ${failure.reason}`);
+    });
+  }
+});
+```
+
+```python Python
+batch_request = metering_pb2.IngestRequest(
+    events=[
+        metering_pb2.Event(
+            id='evt_001',
+            code='compute_seconds',
+            external_customer_alias='customer@example.com',
+            timestamp='2024-01-15T10:00:00Z',
+            properties={
+                'value': '3600',
+                'instance_type': 't3.large',
+                'region': 'us-east-1'
+            }
+        ),
+        metering_pb2.Event(
+            id='evt_002',
+            code='compute_seconds',
+            external_customer_alias='customer@example.com',
+            timestamp='2024-01-15T11:00:00Z',
+            properties={
+                'value': '3600',
+                'instance_type': 't3.medium',
+                'region': 'us-west-2'
+            }
+        ),
+        metering_pb2.Event(
+            id='evt_003',
+            code='data_transfer_gb',
+            external_customer_alias='customer@example.com',
+            timestamp='2024-01-15T10:30:00Z',
+            properties={
+                'value': '125.5',
+                'direction': 'egress',
+                'region': 'us-east-1'
+            }
+        )
+    ],
+    allow_backfilling=False
+)
+
+response = stub.Ingest(batch_request, metadata=metadata)
+
+print(f'Ingested {len(batch_request.events) - len(response.failures)} events')
+
+if len(response.failures) > 0:
+    for failure in response.failures:
+        print(f'Event {failure.event_id} failed: {failure.reason}')
+```
+
+</CodeGroup>
+
+## Event Validation
+
+Events are validated before ingestion. Common validation failures:
+
+### Missing Required Fields
+
+```json
+{
+  "event_id": "evt_123",
+  "reason": "missing required field: code"
+}
+```
+
+### Invalid Timestamp Format
+
+```json
+{
+  "event_id": "evt_456",
+  "reason": "invalid timestamp format, expected RFC3339"
+}
+```
+
+### Timestamp Outside Grace Period
+
+```json
+{
+  "event_id": "evt_789",
+  "reason": "timestamp too far in the past (grace period: 24h)"
+}
+```
+
+Use `allow_backfilling: true` to ingest historical events beyond the grace period.
+
+### Customer Not Found
+
+```json
+{
+  "event_id": "evt_101",
+  "reason": "customer not found: cus_unknown"
+}
+```
+
+## Idempotency
+
+Events are deduplicated using the `id` field. Sending an event with the same ID multiple times will only store it once.
+
+**Best practices:**
+- Generate unique IDs for each logical event
+- Use deterministic IDs for retry safety (e.g., `${customer_id}_${resource_id}_${timestamp}`)
+- Store event IDs for reconciliation
+
+## Backfilling Historical Data
+
+To ingest historical events:
+
+1. Set `allow_backfilling: true` in the request
+2. Ensure timestamps are accurate RFC3339 strings
+3. Batch events by time period for efficiency
+
+<Warning>
+Backfilled events may affect existing usage calculations. Coordinate with your billing team before backfilling.
+</Warning>
+
+## Performance Tips
+
+1. **Batch events** - Send 100-1000 events per request for optimal throughput
+2. **Compress payloads** - Enable gRPC compression for large batches
+3. **Async ingestion** - Don't block application logic waiting for ingestion
+4. **Retry failed events** - Implement exponential backoff for partial failures
+5. **Monitor lag** - Track time between event occurrence and ingestion
+
+## Common Use Cases
+
+### API Request Metering
+
+```typescript
+const event = {
+  id: `api_${requestId}`,
+  code: 'api_calls',
+  meteroid_customer_id: customerId,
+  timestamp: new Date().toISOString(),
+  properties: {
+    endpoint: req.path,
+    method: req.method,
+    status_code: res.statusCode.toString(),
+    response_time_ms: duration.toString()
+  }
+};
+```
+
+### Compute Usage Tracking
+
+```typescript
+const event = {
+  id: `compute_${instanceId}_${hourTimestamp}`,
+  code: 'compute_hours',
+  external_customer_alias: customerEmail,
+  timestamp: hourStart.toISOString(),
+  properties: {
+    value: '1',  // 1 hour
+    instance_type: 't3.large',
+    region: 'us-east-1',
+    vcpus: '2',
+    memory_gb: '8'
+  }
+};
+```
+
+### Data Transfer Metering
+
+```typescript
+const event = {
+  id: `transfer_${sessionId}_${timestamp}`,
+  code: 'data_transfer',
+  meteroid_customer_id: customerId,
+  timestamp: new Date().toISOString(),
+  properties: {
+    value: bytesTransferred.toString(),
+    direction: 'egress',
+    protocol: 'https',
+    region: 'eu-west-1'
+  }
+};
+```
+
+## Error Handling
+
+<CodeGroup>
+
+```typescript TypeScript
+try {
+  const response = await new Promise((resolve, reject) => {
+    client.ingest(request, metadata, (error, response) => {
+      if (error) reject(error);
+      else resolve(response);
+    });
+  });
+  
+  if (response.failures.length > 0) {
+    // Handle partial failures
+    const failedIds = response.failures.map(f => f.event_id);
+    await retryFailedEvents(failedIds);
+  }
+} catch (error) {
+  if (error.code === grpc.status.UNAUTHENTICATED) {
+    // Refresh authentication token
+  } else if (error.code === grpc.status.UNAVAILABLE) {
+    // Retry with backoff
+  } else {
+    // Log and alert
+    console.error('Unexpected error:', error);
+  }
+}
+```
+
+```python Python
+try:
+    response = stub.Ingest(request, metadata=metadata)
+    
+    if len(response.failures) > 0:
+        # Handle partial failures
+        failed_ids = [f.event_id for f in response.failures]
+        retry_failed_events(failed_ids)
+        
+except grpc.RpcError as e:
+    if e.code() == grpc.StatusCode.UNAUTHENTICATED:
+        # Refresh authentication token
+        pass
+    elif e.code() == grpc.StatusCode.UNAVAILABLE:
+        # Retry with backoff
+        pass
+    else:
+        # Log and alert
+        print(f'Unexpected error: {e}')
+```
+
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Query Usage" icon="chart-line" href="/api/metering/query-usage">
+    Learn how to query aggregated usage data
+  </Card>
+  <Card title="Metering Overview" icon="book" href="/api/metering/overview">
+    Understand the metering architecture
+  </Card>
+</CardGroup>

@@ -1,0 +1,43 @@
+---
+title: "Credit Notes"
+description: "Download credit note documents"
+---
+
+Credit notes are issued to refund or credit customers for returned products, invoice corrections, or other adjustments.
+
+## Download Credit Note PDF
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.meteroid.com/api/v1/credit-notes/{credit_note_id}/download" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  --output credit-note.pdf
+```
+</CodeGroup>
+
+**GET** `/api/v1/credit-notes/{credit_note_id}/download`
+
+Download the PDF document for a credit note.
+
+### Path Parameters
+
+<ParamField path="credit_note_id" type="string" required>
+  Credit Note ID (e.g., cn_123)
+</ParamField>
+
+### Response
+
+Returns a binary PDF file with `Content-Type: application/pdf`.
+
+### Response Codes
+
+- **200** - Credit Note PDF successfully retrieved
+- **401** - Unauthorized
+- **404** - Credit note not found or PDF not available
+- **500** - Internal error
+
+<ResponseExample>
+```text Response
+[Binary PDF data]
+```
+</ResponseExample>

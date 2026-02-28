@@ -1,0 +1,348 @@
+---
+title: 'Addons Service'
+description: 'Manage plan add-ons and optional features'
+---
+
+## Overview
+
+The Addons service enables management of optional add-ons that can be attached to plans:
+
+- Create and manage standalone add-ons
+- Attach/detach add-ons to plan versions
+- Configure self-service availability
+- Set instance limits per subscription
+
+## Service Definition
+
+```protobuf
+service AddOnsService {
+  rpc ListAddOns(ListAddOnRequest) returns (ListAddOnResponse) {}
+  rpc CreateAddOn(CreateAddOnRequest) returns (CreateAddOnResponse) {}
+  rpc GetAddOn(GetAddOnRequest) returns (GetAddOnResponse) {}
+  rpc RemoveAddOn(RemoveAddOnRequest) returns (RemoveAddOnResponse) {}
+  rpc EditAddOn(EditAddOnRequest) returns (EditAddOnResponse) {}
+  rpc AttachAddOnToPlanVersion(AttachAddOnToPlanVersionRequest) returns (AttachAddOnToPlanVersionResponse) {}
+  rpc DetachAddOnFromPlanVersion(DetachAddOnFromPlanVersionRequest) returns (DetachAddOnFromPlanVersionResponse) {}
+  rpc ListPlanVersionAddOns(ListPlanVersionAddOnsRequest) returns (ListPlanVersionAddOnsResponse) {}
+}
+```
+
+## RPC Methods
+
+### CreateAddOn
+
+Creates a new add-on.
+
+<ParamField path="name" type="string" required>
+  Add-on name
+</ParamField>
+
+<ParamField path="product" type="ProductRef" required>
+  Product reference
+</ParamField>
+
+<ParamField path="price" type="PriceEntry" required>
+  Pricing configuration
+</ParamField>
+
+<ParamField path="description" type="string">
+  Add-on description
+</ParamField>
+
+<ParamField path="self_serviceable" type="bool" required>
+  Whether customers can self-service add/remove
+</ParamField>
+
+<ParamField path="max_instances_per_subscription" type="int32">
+  Maximum instances per subscription (unlimited if not set)
+</ParamField>
+
+<ParamField path="product_family_local_id" type="string">
+  Product family identifier
+</ParamField>
+
+**Response:** Returns created `AddOn` object.
+
+### ListAddOns
+
+Retrieves a paginated list of add-ons.
+
+<ParamField path="plan_version_id" type="string">
+  Filter by plan version (returns only add-ons attached to this version)
+</ParamField>
+
+<ParamField path="search" type="string">
+  Search query
+</ParamField>
+
+<ParamField path="pagination" type="Pagination">
+  Pagination parameters
+</ParamField>
+
+<ParamField path="currency" type="string">
+  Filter by currency
+</ParamField>
+
+**Response:** Returns paginated list of `AddOn` objects.
+
+### GetAddOn
+
+Retrieves detailed add-on information.
+
+<ParamField path="add_on_id" type="string" required>
+  Add-on ID
+</ParamField>
+
+**Response:** Returns `AddOn` object with complete details.
+
+### EditAddOn
+
+Updates an existing add-on.
+
+<ParamField path="add_on_id" type="string" required>
+  Add-on ID to update
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Updated name
+</ParamField>
+
+<ParamField path="price" type="PriceEntry" required>
+  Updated pricing
+</ParamField>
+
+<ParamField path="description" type="string">
+  Updated description
+</ParamField>
+
+<ParamField path="self_serviceable" type="bool">
+  Updated self-service flag
+</ParamField>
+
+<ParamField path="max_instances_per_subscription" type="int32">
+  Updated instance limit
+</ParamField>
+
+**Response:** Returns updated `AddOn` object.
+
+### RemoveAddOn
+
+Deletes an add-on.
+
+<ParamField path="add_on_id" type="string" required>
+  Add-on ID to remove
+</ParamField>
+
+### AttachAddOnToPlanVersion
+
+Attaches an add-on to a plan version.
+
+<ParamField path="plan_version_id" type="string" required>
+  Plan version ID
+</ParamField>
+
+<ParamField path="add_on_id" type="string" required>
+  Add-on ID to attach
+</ParamField>
+
+<ParamField path="price_id" type="string">
+  Optional custom price ID for this plan
+</ParamField>
+
+<ParamField path="self_serviceable" type="bool">
+  Override self-serviceable setting for this plan
+</ParamField>
+
+<ParamField path="max_instances_per_subscription" type="int32">
+  Override instance limit for this plan
+</ParamField>
+
+**Response:** Returns `PlanVersionAddOn` junction object.
+
+### DetachAddOnFromPlanVersion
+
+Removes an add-on from a plan version.
+
+<ParamField path="plan_version_id" type="string" required>
+  Plan version ID
+</ParamField>
+
+<ParamField path="add_on_id" type="string" required>
+  Add-on ID to detach
+</ParamField>
+
+### ListPlanVersionAddOns
+
+Lists all add-ons attached to a plan version.
+
+<ParamField path="plan_version_id" type="string" required>
+  Plan version ID
+</ParamField>
+
+**Response:** Returns list of `PlanVersionAddOn` objects.
+
+## Data Models
+
+### AddOn
+
+Complete add-on definition.
+
+<ParamField path="id" type="string">
+  Add-on ID
+</ParamField>
+
+<ParamField path="name" type="string">
+  Add-on name
+</ParamField>
+
+<ParamField path="description" type="string">
+  Description
+</ParamField>
+
+<ParamField path="price_id" type="string">
+  Price configuration ID
+</ParamField>
+
+<ParamField path="product_id" type="string">
+  Associated product ID
+</ParamField>
+
+<ParamField path="fee_type" type="FeeType">
+  Fee type from pricing configuration
+</ParamField>
+
+<ParamField path="price" type="Price">
+  Price details
+</ParamField>
+
+<ParamField path="self_serviceable" type="bool">
+  Whether customers can self-service
+</ParamField>
+
+<ParamField path="max_instances_per_subscription" type="int32">
+  Maximum instances per subscription
+</ParamField>
+
+<ParamField path="archived_at" type="timestamp">
+  Archive timestamp (if archived)
+</ParamField>
+
+<ParamField path="fee_structure" type="FeeStructure">
+  Detailed fee structure
+</ParamField>
+
+### PlanVersionAddOn
+
+Junction table representing add-on attached to a plan version.
+
+<ParamField path="id" type="string">
+  Junction ID
+</ParamField>
+
+<ParamField path="plan_version_id" type="string">
+  Plan version ID
+</ParamField>
+
+<ParamField path="add_on_id" type="string">
+  Add-on ID
+</ParamField>
+
+<ParamField path="price_id" type="string">
+  Custom price ID (if overridden)
+</ParamField>
+
+<ParamField path="self_serviceable" type="bool">
+  Self-service override for this plan
+</ParamField>
+
+<ParamField path="max_instances_per_subscription" type="int32">
+  Instance limit override for this plan
+</ParamField>
+
+## Usage Examples
+
+### Create a Premium Support Add-on
+
+```protobuf
+CreateAddOnRequest {
+  name: "Premium Support"
+  description: "24/7 premium customer support"
+  product {
+    id: "prod_premium_support"
+  }
+  price {
+    rate {
+      rate: "99.00"
+    }
+  }
+  self_serviceable: true
+  max_instances_per_subscription: 1
+  product_family_local_id: "support"
+}
+```
+
+### Create a Usage-Based Add-on
+
+```protobuf
+CreateAddOnRequest {
+  name: "Extra API Calls"
+  description: "Additional API call capacity"
+  product {
+    id: "prod_api_calls"
+  }
+  price {
+    usage {
+      metric_id: "api_requests"
+      model {
+        per_unit {
+          unit_price: "0.01"
+        }
+      }
+    }
+  }
+  self_serviceable: true
+  product_family_local_id: "api"
+}
+```
+
+### Attach Add-on to Plan with Custom Settings
+
+```protobuf
+AttachAddOnToPlanVersionRequest {
+  plan_version_id: "plan_v_123"
+  add_on_id: "addon_premium_support"
+  self_serviceable: false  // Override to disable self-service for this plan
+  max_instances_per_subscription: 2  // Allow up to 2 instances
+}
+```
+
+## Add-on Types
+
+Add-ons can have various pricing models:
+
+### One-Time Add-ons
+Charged once when added to a subscription.
+
+### Recurring Add-ons
+Charged on each billing cycle (monthly, yearly, etc.).
+
+### Usage-Based Add-ons
+Charged based on metered usage tracked by billable metrics.
+
+### Slot-Based Add-ons
+Charged per unit/seat with flexible upgrading/downgrading.
+
+## Self-Service Behavior
+
+When `self_serviceable` is `true`:
+- Customers can add/remove the add-on from their subscription via customer portal
+- Subject to `max_instances_per_subscription` limits
+
+When `self_serviceable` is `false`:
+- Only administrators can add/remove the add-on
+- Useful for enterprise features or negotiated add-ons
+
+## Proto Location
+
+- Service definition: `proto/api/addons/v1/addons.proto`
+- Models: `proto/api/addons/v1/models.proto`

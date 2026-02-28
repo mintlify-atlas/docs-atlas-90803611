@@ -1,0 +1,345 @@
+---
+title: "Creating Pricing Plans"
+description: "Learn how to create and configure pricing plans in Meteroid"
+---
+
+Pricing plans are the foundation of your billing infrastructure. This guide walks you through creating a plan from draft to publication.
+
+## Overview
+
+Meteroid uses a versioned plan system where:
+- Plans start as **drafts** that can be freely edited
+- Drafts are **published** to make them available for subscriptions
+- Multiple versions can coexist for different customers
+
+<Steps>
+
+<Step title="Create a draft plan">
+
+Start by creating a draft plan using the PlansService. You'll need to specify the plan name, product family, type, and currency.
+
+```protobuf
+message CreateDraftPlanRequest {
+  string name = 1;
+  optional string description = 3;
+  string product_family_local_id = 4;
+  PlanType plan_type = 5;
+  string currency = 6;
+}
+```
+
+**Plan Types:**
+- `STANDARD` - Regular paid plans with pricing components
+- `FREE` - Free tier plans
+- `CUSTOM` - Enterprise or custom negotiated plans
+
+**Example Request:**
+
+```json
+{
+  "name": "Professional Plan",
+  "description": "Full-featured plan for growing teams",
+  "product_family_local_id": "saas-platform",
+  "plan_type": "STANDARD",
+  "currency": "USD"
+}
+```
+
+The response includes both plan details and the initial draft version:
+
+```json
+{
+  "plan": {
+    "id": "plan_01HX...",
+    "name": "Professional Plan",
+    "local_id": "professional",
+    "plan_type": "STANDARD",
+    "plan_status": "DRAFT",
+    "draft_version_id": "ver_01HX..."
+  },
+  "version": {
+    "id": "ver_01HX...",
+    "is_draft": true,
+    "version": 1,
+    "currency": "USD"
+  }
+}
+```
+
+</Step>
+
+<Step title="Configure plan settings">
+
+Update the draft plan's overview settings including billing terms and metadata.
+
+```protobuf
+message UpdateDraftPlanOverviewRequest {
+  string plan_version_id = 1;
+  string plan_id = 2;
+  string name = 3;
+  optional string description = 4;
+  string currency = 5;
+  uint32 net_terms = 6;
+}
+```
+
+**Example Request:**
+
+```json
+{
+  "plan_id": "plan_01HX...",
+  "plan_version_id": "ver_01HX...",
+  "name": "Professional Plan",
+  "description": "Includes 10 seats and 100GB storage",
+  "currency": "USD",
+  "net_terms": 30
+}
+```
+
+**Net terms** define the payment due date (e.g., `30` = payment due within 30 days).
+
+</Step>
+
+<Step title="Add pricing components">
+
+Pricing components define what customers pay for. Add components using the PriceComponentsService.
+
+```protobuf
+message CreatePriceComponentRequest {
+  string plan_version_id = 1;
+  string name = 2;
+  ProductRef product = 7;
+  repeated PriceEntry prices = 8;
+}
+```
+
+**Common pricing component types:**
+
+### Fixed subscription fee
+
+```json
+{
+  "plan_version_id": "ver_01HX...",
+  "name": "Base subscription",
+  "product": {
+    "new_product": {
+      "name": "Base subscription",
+      "fee_type": "SUBSCRIPTION",
+      "fee_structure": {
+        "rate": {}
+      }
+    }
+  },
+  "prices": [
+    {
+      "new_price": {
+        "cadence": "MONTHLY",
+        "currency": "USD",
+        "rate_pricing": {
+          "rate": "9900"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Usage-based component
+
+```json
+{
+  "plan_version_id": "ver_01HX...",
+  "name": "API calls",
+  "product": {
+    "new_product": {
+      "name": "API usage",
+      "fee_type": "USAGE",
+      "fee_structure": {
+        "usage": {
+          "metric_id": "metric_api_calls"
+        }
+      }
+    }
+  },
+  "prices": [
+    {
+      "new_price": {
+        "cadence": "MONTHLY",
+        "currency": "USD",
+        "usage_pricing": {
+          "per_unit": {
+            "per_unit_price": "10"
+          },
+          "metric_id": "metric_api_calls"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Slot-based (per seat) pricing
+
+```json
+{
+  "plan_version_id": "ver_01HX...",
+  "name": "User seats",
+  "product": {
+    "new_product": {
+      "name": "User seats",
+      "fee_type": "SLOT",
+      "fee_structure": {
+        "slot": {
+          "unit": "seat",
+          "upgrade_policy": "PRORATED",
+          "downgrade_policy": "REMOVE_AT_END_OF_PERIOD"
+        }
+      }
+    }
+  },
+  "prices": [
+    {
+      "new_price": {
+        "cadence": "MONTHLY",
+        "currency": "USD",
+        "slot_pricing": {
+          "unit_price": "1500",
+          "min_slots": 1,
+          "max_slots": 100
+        }
+      }
+    }
+  ]
+}
+```
+
+<Note>
+Prices are specified in the smallest currency unit (cents for USD). So `"9900"` = $99.00
+</Note>
+
+</Step>
+
+<Step title="Configure trial settings (optional)">
+
+Add a trial period to your plan to let customers try before they buy.
+
+```protobuf
+message UpdatePlanTrialRequest {
+  string plan_id = 1;
+  string plan_version_id = 2;
+  TrialConfig trial = 3;
+}
+
+message TrialConfig {
+  uint32 duration_days = 1;
+  bool trial_is_free = 2;
+  optional string trialing_plan_id = 3;
+}
+```
+
+**Example Request:**
+
+```json
+{
+  "plan_id": "plan_01HX...",
+  "plan_version_id": "ver_01HX...",
+  "trial": {
+    "duration_days": 14,
+    "trial_is_free": true
+  }
+}
+```
+
+Set `trial_is_free` to `false` if you want to charge the plan price during the trial period.
+
+</Step>
+
+<Step title="Publish the plan">
+
+Once your draft is ready, publish it to make it available for subscriptions.
+
+```protobuf
+message PublishPlanVersionRequest {
+  string plan_id = 1;
+  string plan_version_id = 2;
+}
+```
+
+**Example Request:**
+
+```json
+{
+  "plan_id": "plan_01HX...",
+  "plan_version_id": "ver_01HX..."
+}
+```
+
+After publishing:
+- The plan status changes to `ACTIVE`
+- It becomes available for new subscriptions
+- The version can no longer be edited
+- You can create a new draft version for future changes
+
+</Step>
+
+</Steps>
+
+## Plan versioning
+
+Meteroid's versioning system allows you to evolve plans without affecting existing customers:
+
+### Creating a new version
+
+To create a new version based on an existing one:
+
+```json
+{
+  "plan_id": "plan_01HX...",
+  "plan_version_id": "ver_01HX..."
+}
+```
+
+This copies the plan configuration to a new draft that you can modify and publish.
+
+### Version strategy
+
+- **Existing subscriptions** continue on their current version
+- **New subscriptions** use the latest published version
+- You can **grandfather** customers on old pricing indefinitely
+
+## Best practices
+
+<AccordionGroup>
+
+<Accordion title="Keep plan names clear and descriptive">
+Use names that clearly communicate value tier (Starter, Professional, Enterprise) and make it easy for customers to understand positioning.
+</Accordion>
+
+<Accordion title="Set appropriate net terms">
+B2B SaaS typically uses 30-day net terms. Consumer products often use 0 (payment due immediately).
+</Accordion>
+
+<Accordion title="Start with fewer pricing components">
+Begin with 2-3 core components (base fee + 1-2 usage metrics). Add complexity as you validate your pricing model.
+</Accordion>
+
+<Accordion title="Use trials to reduce friction">
+14-day free trials are common in SaaS. Credit card optional trials can increase conversion.
+</Accordion>
+
+<Accordion title="Version thoughtfully">
+Create new versions for material pricing changes. Minor updates (description changes) can use UpdatePublishedPlanOverview.
+</Accordion>
+
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Managing Subscriptions" icon="repeat" href="/guides/managing-subscriptions">
+    Learn how to create subscriptions from your plans
+  </Card>
+  <Card title="Tracking Usage" icon="chart-line" href="/guides/tracking-usage">
+    Set up usage metering for consumption-based pricing
+  </Card>
+</CardGroup>

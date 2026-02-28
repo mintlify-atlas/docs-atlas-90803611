@@ -1,0 +1,615 @@
+---
+title: 'Usage Query API'
+description: 'Query aggregated usage data and raw events from the metering service'
+---
+
+## Overview
+
+The Usage Query API provides flexible methods to retrieve aggregated usage data and raw events. It supports time-windowing, multi-dimensional grouping, and advanced segmentation filters.
+
+## Query Meter Endpoint
+
+Retrieve aggregated usage data based on meter configuration.
+
+### Request Message
+
+```protobuf
+message QueryMeterRequest {
+  string tenant_id = 1;
+  string meter_slug = 2;
+  Meter.AggregationType meter_aggregation_type = 3;
+  repeated string customer_ids = 4;
+  google.protobuf.Timestamp from = 5;
+  google.protobuf.Timestamp to = 6;
+  repeated string group_by_properties = 7;
+  QueryWindowSize window_size = 9;
+  optional string timezone = 10;
+  string code = 11;
+  optional SegmentationFilter segmentation_filter = 12;
+  optional string value_property = 13;
+}
+```
+
+### Parameters
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `tenant_id` | string | Yes | Your tenant identifier |
+| `meter_slug` | string | Yes | Meter identifier |
+| `meter_aggregation_type` | enum | Yes | Aggregation type (SUM, COUNT, AVG, etc.) |
+| `customer_ids` | string[] | No | Filter by specific customers (empty = all) |
+| `from` | timestamp | Yes | Start of the time range (inclusive) |
+| `to` | timestamp | No | End of the time range (inclusive, defaults to now) |
+| `group_by_properties` | string[] | No | Properties to group results by |
+| `window_size` | enum | Yes | Time window size (MINUTE, HOUR, DAY, AGGREGATE_ALL) |
+| `timezone` | string | No | IANA timezone (e.g., `America/New_York`) |
+| `code` | string | Yes | Billable metric code |
+| `segmentation_filter` | object | No | Advanced filtering criteria |
+| `value_property` | string | No | Property to aggregate (required for SUM, AVG, MIN, MAX) |
+
+### Aggregation Types
+
+```protobuf
+enum AggregationType {
+  SUM = 0;             // Sum of values
+  MIN = 1;             // Minimum value
+  MAX = 2;             // Maximum value
+  MEAN = 3;            // Average value
+  LATEST = 4;          // Most recent value
+  COUNT = 5;           // Count of events
+  COUNT_DISTINCT = 6;  // Count of unique values
+}
+```
+
+### Window Sizes
+
+```protobuf
+enum QueryWindowSize {
+  MINUTE = 0;        // 1-minute windows
+  HOUR = 1;          // 1-hour windows
+  DAY = 2;           // 1-day windows
+  AGGREGATE_ALL = 4; // Single aggregate over entire period
+}
+```
+
+### Response Message
+
+```protobuf
+message QueryMeterResponse {
+  repeated Usage usage = 1;
+  
+  message Usage {
+    optional string customer_id = 1;
+    meteroid.common.v1.Decimal value = 2;
+    google.protobuf.Timestamp window_start = 3;
+    google.protobuf.Timestamp window_end = 4;
+    map<string, DimensionValueField> dimensions = 5;
+  }
+}
+```
+
+## Segmentation Filters
+
+Apply advanced filtering to narrow query results.
+
+### Independent Filters
+
+Filter by multiple independent dimensions (logical AND):
+
+```protobuf
+message IndependentFilters {
+  repeated Filter filters = 1;
+}
+
+message Filter {
+  string property_name = 1;
+  repeated string property_value = 2;  // logical OR within property
+}
+```
+
+**Example:** Filter by region AND instance type
+
+```typescript
+segmentation_filter: {
+  independent: {
+    filters: [
+      { property_name: 'region', property_value: ['us-east-1', 'us-west-2'] },
+      { property_name: 'instance_type', property_value: ['t3.large', 't3.xlarge'] }
+    ]
+  }
+}
+```
+
+### Linked Filters
+
+Filter by correlated dimension pairs:
+
+```protobuf
+message LinkedFilters {
+  string dimension1_key = 1;
+  string dimension2_key = 2;
+  map<string, LinkedDimensionValues> linked_values = 3;
+}
+```
+
+**Example:** Filter specific region-instance combinations
+
+```typescript
+segmentation_filter: {
+  linked: {
+    dimension1_key: 'region',
+    dimension2_key: 'instance_type',
+    linked_values: {
+      'us-east-1': { values: ['t3.large', 't3.xlarge'] },
+      'us-west-2': { values: ['t3.medium'] }
+    }
+  }
+}
+```
+
+## Usage Examples
+
+### Basic Aggregation
+
+<CodeGroup>
+
+```typescript TypeScript
+import * as grpc from '@grpc/grpc-js';
+import { UsageQueryServiceClient } from './generated/metering';
+
+const client = new UsageQueryServiceClient(
+  'metering.meteroid.com:443',
+  grpc.credentials.createSsl()
+);
+
+const metadata = new grpc.Metadata();
+metadata.add('authorization', 'Bearer YOUR_API_KEY');
+
+const request = {
+  tenant_id: 'tenant_123',
+  meter_slug: 'api-calls-meter',
+  code: 'api_calls',
+  meter_aggregation_type: 'COUNT',
+  customer_ids: ['cus_123'],
+  from: { seconds: Math.floor(Date.now() / 1000) - 86400 }, // 24 hours ago
+  to: { seconds: Math.floor(Date.now() / 1000) },
+  window_size: 'HOUR',
+  group_by_properties: [],
+  timezone: 'America/New_York'
+};
+
+client.queryMeter(request, metadata, (error, response) => {
+  if (error) {
+    console.error('Query failed:', error);
+    return;
+  }
+  
+  response.usage.forEach(u => {
+    console.log(`${u.window_start} - ${u.window_end}: ${u.value} calls`);
+  });
+});
+```
+
+```python Python
+import grpc
+from datetime import datetime, timedelta
+from google.protobuf.timestamp_pb2 import Timestamp
+from generated import metering_pb2, metering_pb2_grpc
+
+channel = grpc.secure_channel(
+    'metering.meteroid.com:443',
+    grpc.ssl_channel_credentials()
+)
+stub = metering_pb2_grpc.UsageQueryServiceStub(channel)
+
+metadata = [('authorization', 'Bearer YOUR_API_KEY')]
+
+now = datetime.utcnow()
+from_time = Timestamp()
+from_time.FromDatetime(now - timedelta(days=1))
+to_time = Timestamp()
+to_time.FromDatetime(now)
+
+request = metering_pb2.QueryMeterRequest(
+    tenant_id='tenant_123',
+    meter_slug='api-calls-meter',
+    code='api_calls',
+    meter_aggregation_type=metering_pb2.Meter.COUNT,
+    customer_ids=['cus_123'],
+    from_=from_time,
+    to=to_time,
+    window_size=metering_pb2.QueryMeterRequest.HOUR,
+    group_by_properties=[],
+    timezone='America/New_York'
+)
+
+response = stub.QueryMeter(request, metadata=metadata)
+
+for usage in response.usage:
+    print(f'{usage.window_start} - {usage.window_end}: {usage.value.value} calls')
+```
+
+</CodeGroup>
+
+### Multi-Dimensional Grouping
+
+<CodeGroup>
+
+```typescript TypeScript
+// Query compute hours grouped by region and instance type
+const request = {
+  tenant_id: 'tenant_123',
+  meter_slug: 'compute-hours',
+  code: 'compute_hours',
+  meter_aggregation_type: 'SUM',
+  value_property: 'value',
+  customer_ids: ['cus_123'],
+  from: { seconds: Math.floor(Date.now() / 1000) - 604800 }, // 7 days
+  to: { seconds: Math.floor(Date.now() / 1000) },
+  window_size: 'DAY',
+  group_by_properties: ['region', 'instance_type'],
+  timezone: 'UTC'
+};
+
+client.queryMeter(request, metadata, (error, response) => {
+  if (error) {
+    console.error('Query failed:', error);
+    return;
+  }
+  
+  response.usage.forEach(u => {
+    const region = u.dimensions.region?.value || 'unknown';
+    const instanceType = u.dimensions.instance_type?.value || 'unknown';
+    console.log(
+      `${u.window_start}: ${region}/${instanceType} = ${u.value} hours`
+    );
+  });
+});
+```
+
+```python Python
+# Query compute hours grouped by region and instance type
+request = metering_pb2.QueryMeterRequest(
+    tenant_id='tenant_123',
+    meter_slug='compute-hours',
+    code='compute_hours',
+    meter_aggregation_type=metering_pb2.Meter.SUM,
+    value_property='value',
+    customer_ids=['cus_123'],
+    from_=from_time,
+    to=to_time,
+    window_size=metering_pb2.QueryMeterRequest.DAY,
+    group_by_properties=['region', 'instance_type'],
+    timezone='UTC'
+)
+
+response = stub.QueryMeter(request, metadata=metadata)
+
+for usage in response.usage:
+    region = usage.dimensions.get('region').value or 'unknown'
+    instance_type = usage.dimensions.get('instance_type').value or 'unknown'
+    print(f'{usage.window_start}: {region}/{instance_type} = {usage.value.value} hours')
+```
+
+</CodeGroup>
+
+### With Segmentation Filters
+
+<CodeGroup>
+
+```typescript TypeScript
+// Query only production API calls in specific regions
+const request = {
+  tenant_id: 'tenant_123',
+  meter_slug: 'api-calls',
+  code: 'api_calls',
+  meter_aggregation_type: 'COUNT',
+  customer_ids: [],
+  from: { seconds: Math.floor(Date.now() / 1000) - 3600 },
+  window_size: 'AGGREGATE_ALL',
+  segmentation_filter: {
+    independent: {
+      filters: [
+        {
+          property_name: 'environment',
+          property_value: ['production']
+        },
+        {
+          property_name: 'region',
+          property_value: ['us-east-1', 'us-west-2']
+        }
+      ]
+    }
+  }
+};
+
+client.queryMeter(request, metadata, (error, response) => {
+  if (error) {
+    console.error('Query failed:', error);
+    return;
+  }
+  
+  const totalCalls = response.usage.reduce(
+    (sum, u) => sum + parseFloat(u.value.value),
+    0
+  );
+  console.log(`Total production API calls: ${totalCalls}`);
+});
+```
+
+```python Python
+# Query only production API calls in specific regions
+request = metering_pb2.QueryMeterRequest(
+    tenant_id='tenant_123',
+    meter_slug='api-calls',
+    code='api_calls',
+    meter_aggregation_type=metering_pb2.Meter.COUNT,
+    customer_ids=[],
+    from_=from_time,
+    window_size=metering_pb2.QueryMeterRequest.AGGREGATE_ALL,
+    segmentation_filter=metering_pb2.SegmentationFilter(
+        independent=metering_pb2.SegmentationFilter.IndependentFilters(
+            filters=[
+                metering_pb2.Filter(
+                    property_name='environment',
+                    property_value=['production']
+                ),
+                metering_pb2.Filter(
+                    property_name='region',
+                    property_value=['us-east-1', 'us-west-2']
+                )
+            ]
+        )
+    )
+)
+
+response = stub.QueryMeter(request, metadata=metadata)
+
+total_calls = sum(float(u.value.value) for u in response.usage)
+print(f'Total production API calls: {total_calls}')
+```
+
+</CodeGroup>
+
+## Query Raw Events
+
+Retrieve raw, unprocessed events for debugging and audit purposes.
+
+### Request Message
+
+```protobuf
+message QueryRawEventsRequest {
+  string tenant_id = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+  uint32 limit = 4;    // Max 1000
+  uint32 offset = 5;
+  optional string search = 6;
+  repeated string event_codes = 7;
+  repeated string customer_ids = 8;
+  SortOrder sort_order = 9;
+  
+  enum SortOrder {
+    TIMESTAMP_DESC = 0;
+    TIMESTAMP_ASC = 1;
+    INGESTED_DESC = 2;
+    INGESTED_ASC = 3;
+  }
+}
+```
+
+### Response Message
+
+```protobuf
+message QueryRawEventsResponse {
+  repeated Event events = 1;
+}
+```
+
+### Example: Query Raw Events
+
+<CodeGroup>
+
+```typescript TypeScript
+const request = {
+  tenant_id: 'tenant_123',
+  from: { seconds: Math.floor(Date.now() / 1000) - 3600 },
+  to: { seconds: Math.floor(Date.now() / 1000) },
+  limit: 100,
+  offset: 0,
+  search: 'error',
+  event_codes: ['api_calls'],
+  customer_ids: ['cus_123'],
+  sort_order: 'TIMESTAMP_DESC'
+};
+
+client.queryRawEvents(request, metadata, (error, response) => {
+  if (error) {
+    console.error('Query failed:', error);
+    return;
+  }
+  
+  console.log(`Found ${response.events.length} events`);
+  
+  response.events.forEach(event => {
+    console.log(`[${event.timestamp}] ${event.code}:`, event.properties);
+  });
+});
+```
+
+```python Python
+request = metering_pb2.QueryRawEventsRequest(
+    tenant_id='tenant_123',
+    from_=from_time,
+    to=to_time,
+    limit=100,
+    offset=0,
+    search='error',
+    event_codes=['api_calls'],
+    customer_ids=['cus_123'],
+    sort_order=metering_pb2.QueryRawEventsRequest.TIMESTAMP_DESC
+)
+
+response = stub.QueryRawEvents(request, metadata=metadata)
+
+print(f'Found {len(response.events)} events')
+
+for event in response.events:
+    print(f'[{event.timestamp}] {event.code}:', event.properties)
+```
+
+</CodeGroup>
+
+## Performance Considerations
+
+### Query Optimization
+
+1. **Limit time ranges** - Shorter periods = faster queries
+2. **Use appropriate window sizes** - Larger windows for long periods
+3. **Minimize grouping dimensions** - Each dimension multiplies result size
+4. **Filter by customer** - Reduces data scanned
+5. **Leverage segmentation filters** - Pushes filtering to database
+
+### Response Size Limits
+
+- **QueryMeter**: No hard limit, but results scale with time range × dimensions
+- **QueryRawEvents**: Maximum 1000 events per request (use pagination)
+
+### Pagination Pattern
+
+```typescript
+let offset = 0;
+const limit = 100;
+const allEvents = [];
+
+while (true) {
+  const response = await queryRawEvents({
+    ...baseRequest,
+    limit,
+    offset
+  });
+  
+  allEvents.push(...response.events);
+  
+  if (response.events.length < limit) {
+    break; // No more results
+  }
+  
+  offset += limit;
+}
+
+console.log(`Retrieved ${allEvents.length} total events`);
+```
+
+## Common Query Patterns
+
+### Daily Usage by Customer
+
+```typescript
+const request = {
+  tenant_id: 'tenant_123',
+  meter_slug: 'api-usage',
+  code: 'api_calls',
+  meter_aggregation_type: 'COUNT',
+  customer_ids: [], // All customers
+  from: { seconds: startOfMonth },
+  to: { seconds: endOfMonth },
+  window_size: 'DAY',
+  group_by_properties: [], // Group by customer_id automatically
+  timezone: 'America/New_York'
+};
+```
+
+### Peak Usage Detection
+
+```typescript
+const request = {
+  tenant_id: 'tenant_123',
+  meter_slug: 'concurrent-users',
+  code: 'active_users',
+  meter_aggregation_type: 'MAX',
+  value_property: 'count',
+  customer_ids: ['cus_123'],
+  from: { seconds: startOfDay },
+  to: { seconds: endOfDay },
+  window_size: 'MINUTE',
+  timezone: 'UTC'
+};
+```
+
+### Cost Analysis by Dimension
+
+```typescript
+const request = {
+  tenant_id: 'tenant_123',
+  meter_slug: 'compute-cost',
+  code: 'compute_hours',
+  meter_aggregation_type: 'SUM',
+  value_property: 'hours',
+  customer_ids: ['cus_123'],
+  from: { seconds: startOfWeek },
+  window_size: 'AGGREGATE_ALL',
+  group_by_properties: ['region', 'environment'],
+  timezone: 'UTC'
+};
+```
+
+## Error Handling
+
+<CodeGroup>
+
+```typescript TypeScript
+try {
+  const response = await new Promise((resolve, reject) => {
+    client.queryMeter(request, metadata, (error, response) => {
+      if (error) reject(error);
+      else resolve(response);
+    });
+  });
+  
+  // Process response
+  processUsageData(response.usage);
+  
+} catch (error) {
+  if (error.code === grpc.status.INVALID_ARGUMENT) {
+    console.error('Invalid query parameters:', error.details);
+  } else if (error.code === grpc.status.DEADLINE_EXCEEDED) {
+    console.error('Query timeout - try a shorter time range');
+  } else if (error.code === grpc.status.RESOURCE_EXHAUSTED) {
+    console.error('Rate limit exceeded');
+  } else {
+    console.error('Unexpected error:', error);
+  }
+}
+```
+
+```python Python
+try:
+    response = stub.QueryMeter(request, metadata=metadata)
+    
+    # Process response
+    process_usage_data(response.usage)
+    
+except grpc.RpcError as e:
+    if e.code() == grpc.StatusCode.INVALID_ARGUMENT:
+        print(f'Invalid query parameters: {e.details()}')
+    elif e.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
+        print('Query timeout - try a shorter time range')
+    elif e.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
+        print('Rate limit exceeded')
+    else:
+        print(f'Unexpected error: {e}')
+```
+
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Ingest Events" icon="upload" href="/api/metering/ingest-events">
+    Learn how to send usage events
+  </Card>
+  <Card title="Metering Overview" icon="book" href="/api/metering/overview">
+    Understand the metering architecture
+  </Card>
+</CardGroup>
