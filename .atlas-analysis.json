@@ -1,0 +1,170 @@
+{
+  "projectType": "saas",
+  "projectName": "Meteroid",
+  "projectDescription": "Open-source pricing and billing infrastructure for product-led SaaS with usage-based billing, subscriptions, and invoicing",
+  "theme": "aspen",
+  "primaryColor": "#6366f1",
+  "lightColor": "#818cf8",
+  "darkColor": "#4f46e5",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Installation",
+            "pages": [
+              "installation/docker-compose",
+              "installation/kubernetes",
+              "installation/configuration"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/tenants-organizations",
+              "concepts/customers",
+              "concepts/pricing-plans",
+              "concepts/subscriptions",
+              "concepts/metering",
+              "concepts/invoicing"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/usage-based-billing",
+              "features/subscription-management",
+              "features/pricing-models",
+              "features/invoicing",
+              "features/metering",
+              "features/checkout",
+              "features/coupons-discounts",
+              "features/credit-notes",
+              "features/analytics"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/overview",
+              "integrations/stripe",
+              "integrations/webhooks"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/creating-plans",
+              "guides/tracking-usage",
+              "guides/managing-subscriptions",
+              "guides/generating-invoices",
+              "guides/setting-up-checkout"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/contributing",
+              "development/building-from-source",
+              "development/architecture-overview"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/introduction",
+              "api/authentication",
+              "api/errors"
+            ]
+          },
+          {
+            "group": "REST API",
+            "pages": [
+              "api/rest/checkout-sessions",
+              "api/rest/customers",
+              "api/rest/subscriptions",
+              "api/rest/invoices",
+              "api/rest/credit-notes",
+              "api/rest/plans",
+              "api/rest/events",
+              "api/rest/usage"
+            ]
+          },
+          {
+            "group": "gRPC API",
+            "pages": [
+              "api/grpc/overview",
+              "api/grpc/customers",
+              "api/grpc/subscriptions",
+              "api/grpc/invoices",
+              "api/grpc/plans",
+              "api/grpc/billable-metrics",
+              "api/grpc/addons",
+              "api/grpc/coupons",
+              "api/grpc/organizations"
+            ]
+          },
+          {
+            "group": "Metering API",
+            "pages": [
+              "api/metering/overview",
+              "api/metering/ingest-events",
+              "api/metering/query-usage"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Usage-based billing and metering",
+    "Subscription management with flexible pricing models",
+    "Automated invoice generation and management",
+    "Real-time event tracking and analytics",
+    "Multi-tenant architecture with organization support",
+    "Checkout sessions for self-service subscriptions",
+    "Coupons, discounts, and credit notes",
+    "Payment provider integrations (Stripe)",
+    "Webhook notifications",
+    "REST and gRPC APIs",
+    "Self-hosted or cloud deployment",
+    "ClickHouse-based analytics engine"
+  ],
+  "publicApiSurface": [
+    "POST /api/v1/checkout-sessions - Create checkout session",
+    "GET /api/v1/customers - List customers",
+    "POST /api/v1/customers - Create customer",
+    "GET /api/v1/subscriptions - List subscriptions",
+    "POST /api/v1/subscriptions - Create subscription",
+    "GET /api/v1/invoices - List invoices",
+    "POST /api/v1/invoices - Generate invoice",
+    "GET /api/v1/credit-notes - List credit notes",
+    "POST /api/v1/credit-notes - Create credit note",
+    "GET /api/v1/plans - List pricing plans",
+    "POST /api/v1/events - Ingest usage events",
+    "GET /api/v1/usage - Query usage data",
+    "gRPC AddonsService - Manage add-ons",
+    "gRPC BillableMetricsService - Configure billable metrics",
+    "gRPC CustomersService - Customer management",
+    "gRPC InvoicesService - Invoice operations",
+    "gRPC OrganizationsService - Multi-tenant management",
+    "gRPC PlansService - Pricing plan configuration",
+    "gRPC SubscriptionsService - Subscription lifecycle",
+    "gRPC WebhooksService - Webhook configuration",
+    "Metering API - Event ingestion and usage queries"
+  ]
+}
